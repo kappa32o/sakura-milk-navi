@@ -55,6 +55,8 @@
   .progress-label { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
   .progress-warn { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-text); font-size: 0.84rem; font-weight: 600; }
   .timechart-summary { margin: 0 0 10px; color: var(--text-muted); font-size: 0.84rem; font-weight: 700; }
+  .timechart-svg-wrap { margin: 0 0 12px; }
+  .timechart-svg-wrap svg { display: block; width: 100%; height: 90px; }
   .timechart-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 2px; font-size: 0.86rem; }
   .timechart-row-actual { color: var(--text-muted); }
   .timechart-row-planned { color: var(--text); font-weight: 700; }
@@ -191,6 +193,7 @@
       <div class="card" id="timechart-card">
         <p class="eyebrow">きょうのタイムチャート</p>
         <p class="timechart-summary" id="timechart-summary"></p>
+        <div class="timechart-svg-wrap" id="timechart-svg"></div>
         <div id="timechart-rows"></div>
       </div>
       <div class="card encouragement-card">
@@ -333,6 +336,9 @@
   var MIN_IRREGULAR_ML = 40;
   var WARN_RATIO = 1.1;
   var RECORD_HISTORY_DAYS = 7;
+  var TIMECHART_SVG_W = 700;
+  var TIMECHART_SVG_H = 90;
+  var TIMECHART_LABEL_GAP_PX = 30;
   var DEFAULT_PAPA_MESSAGES = [
     "今日もほんとうにえらい。はるたんのペースで大丈夫",
     "泣くのはさくらたんのおしゃべり。責められてるわけじゃないよ",
@@ -698,10 +704,59 @@
       done: !!nextFeed.done
     };
   }
+  // 0〜24時のタイムラインをインラインSVGで描画する。実績/予定の配列(時刻・量)をそのままxy座標に変換するだけの純関数。
+  function buildTimeChartSvg(actualRows, plannedRows, now, todayStr) {
+    var W = TIMECHART_SVG_W, H = TIMECHART_SVG_H;
+    var minX = 26, maxX = W - 14;
+    var axisY = 70, dotY = 38, dotR = 7;
+    var dayStart = new Date(todayStr + "T00:00:00");
+    function timeToX(date) {
+      var minutes = (date - dayStart) / 60000;
+      var t = clamp(minutes / 1440, 0, 1);
+      return minX + t * (maxX - minX);
+    }
+    var parts = [];
+    parts.push('<line x1="' + minX + '" y1="' + axisY + '" x2="' + maxX + '" y2="' + axisY + '" stroke="var(--text-muted)" stroke-width="1" opacity="0.35" />');
+    [0, 6, 12, 18, 24].forEach(function (h) {
+      var x = minX + (h / 24) * (maxX - minX);
+      parts.push('<line x1="' + x + '" y1="' + (axisY - 4) + '" x2="' + x + '" y2="' + (axisY + 4) + '" stroke="var(--text-muted)" stroke-width="1" opacity="0.5" />');
+      parts.push('<text x="' + x + '" y="' + (axisY + 15) + '" font-size="9" fill="var(--text-muted)" text-anchor="middle">' + h + '</text>');
+    });
+    var points = actualRows.map(function (r) {
+      return { x: timeToX(r.time), ml: r.ml, kind: "actual", irregular: !!r.irregular };
+    }).concat(plannedRows.map(function (r) {
+      return { x: timeToX(r.time), ml: r.ml, kind: "planned" };
+    }));
+    points.sort(function (a, b) { return a.x - b.x; });
+    var lastX = -Infinity;
+    var lastAbove = false;
+    points.forEach(function (p) {
+      var above = (p.x - lastX) < TIMECHART_LABEL_GAP_PX ? !lastAbove : true;
+      lastAbove = above;
+      lastX = p.x;
+      var labelY = above ? dotY - 13 : dotY + 20;
+      if (p.kind === "actual") {
+        var fill = p.irregular ? "var(--danger)" : "var(--primary)";
+        parts.push('<circle cx="' + p.x + '" cy="' + dotY + '" r="' + dotR + '" fill="' + fill + '" />');
+        parts.push('<text x="' + p.x + '" y="' + labelY + '" font-size="10" font-weight="700" fill="var(--text)" text-anchor="middle">' + p.ml + '</text>');
+      } else {
+        parts.push('<circle cx="' + p.x + '" cy="' + dotY + '" r="' + dotR + '" fill="var(--surface)" stroke="var(--primary)" stroke-width="1.6" stroke-dasharray="2,2" />');
+        parts.push('<text x="' + p.x + '" y="' + labelY + '" font-size="10" font-weight="600" fill="var(--text-muted)" text-anchor="middle">' + p.ml + '</text>');
+      }
+    });
+    if (now >= dayStart && now < new Date(dayStart.getTime() + 86400000)) {
+      var nowX = timeToX(now);
+      parts.push('<line x1="' + nowX + '" y1="14" x2="' + nowX + '" y2="' + axisY + '" stroke="var(--primary-dark)" stroke-width="1.5" />');
+      parts.push('<text x="' + nowX + '" y="12" font-size="9" font-weight="700" fill="var(--primary-dark)" text-anchor="middle">いま</text>');
+    }
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" role="img" aria-label="きょうのタイムチャート図">' + parts.join("") + '</svg>';
+  }
   function renderTimeChart(now) {
     var data = computeTimeChartData(now);
     document.getElementById("timechart-summary").textContent =
       "実績 " + data.sumToday + "ml ・ のこり予定 " + data.remainingBudget + "ml ／ 1日の目安 " + Math.round(data.dailyTotal) + "ml";
+    document.getElementById("timechart-svg").innerHTML =
+      buildTimeChartSvg(data.actualRows, data.plannedRows, now, formatDateISO(now));
     var rowsEl = document.getElementById("timechart-rows");
     rowsEl.innerHTML = "";
     if (data.actualRows.length === 0 && data.plannedRows.length === 0 && data.tomorrowMl <= 0) {
