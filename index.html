@@ -198,18 +198,6 @@
         <p class="progress-label" id="progress-label">0ml / 目安0ml</p>
         <p class="progress-warn" id="progress-warn" hidden></p>
       </div>
-      <div class="card" id="timechart-card">
-        <div class="timechart-header">
-          <p class="eyebrow">きょうのタイムチャート</p>
-          <p class="timechart-scroll-hint">← スクロールできるよ →</p>
-        </div>
-        <p class="timechart-summary" id="timechart-summary"></p>
-        <div class="timechart-svg-wrap" id="timechart-svg"></div>
-        <div id="timechart-rows"></div>
-      </div>
-      <div class="card encouragement-card">
-        <p id="encouragement-text">今日もほんとうにえらい。はるたんのペースで大丈夫</p>
-      </div>
       <div class="card feed-panel" id="feed-panel" hidden>
         <p class="feed-panel-label">飲んだ量を確認してね</p>
         <div class="stepper">
@@ -225,6 +213,18 @@
       <div class="cta-stack">
         <button class="btn btn-primary btn-block" id="btn-open-feed-panel">🍼 いま飲ませた</button>
         <button class="btn btn-cry btn-block" id="btn-go-irregular">😭 泣き止まない…</button>
+      </div>
+      <div class="card" id="timechart-card">
+        <div class="timechart-header">
+          <p class="eyebrow">きょうのタイムチャート</p>
+          <p class="timechart-scroll-hint">← スクロールできるよ →</p>
+        </div>
+        <p class="timechart-summary" id="timechart-summary"></p>
+        <div class="timechart-svg-wrap" id="timechart-svg"></div>
+        <div id="timechart-rows"></div>
+      </div>
+      <div class="card encouragement-card">
+        <p id="encouragement-text">今日もほんとうにえらい。はるたんのペースで大丈夫</p>
       </div>
     </section>
     <section id="screen-irregular" class="screen" hidden>
@@ -386,9 +386,22 @@
   function calcDailyTargetMl(weightGrams, coefMlPerKgPerDay, capMl) {
     return Math.min((weightGrams / 1000) * coefMlPerKgPerDay, capMl);
   }
-  function calcPerFeedMlFromRow(weightGrams, row) {
+  // クランプ前（体重から素直に計算した）1回量。設定プレビュー/根拠画面で
+  // 「体重を反映しても缶レンジでおさえられて見た目が変わらない」ケースを説明するために使う。
+  function calcPerFeedRawMl(weightGrams, row) {
     var dailyTarget = calcDailyTargetMl(weightGrams, row.coef, DAILY_CAP_ML);
-    return clamp(roundToUnit(dailyTarget / row.defFeeds), row.minMl, row.maxMl);
+    return roundToUnit(dailyTarget / row.defFeeds);
+  }
+  function calcPerFeedMlFromRow(weightGrams, row) {
+    return clamp(calcPerFeedRawMl(weightGrams, row), row.minMl, row.maxMl);
+  }
+  // クランプ発生時に添える説明文。クランプがなければ空文字。
+  function buildClampNote(row, rawMl, perFeedMl) {
+    if (rawMl === perFeedMl) return "";
+    if (rawMl > perFeedMl) {
+      return "体重からは" + rawMl + "mlだけど、" + row.label + "の缶の上限でおさえてるよ";
+    }
+    return "体重からは" + rawMl + "mlだけど、" + row.label + "の缶の下限でおさえてるよ";
   }
   // 今あげてOKな量。経過時間に比例した量が40mlに満たないときは、
   // 次の回のぶんから40mlを前借りする（次回時刻は時間クレジットで自動的に繰り下がる）。
@@ -1160,8 +1173,13 @@
       var cycleHours = formatHours(calcCycleMinutesForFeeds(feeds));
       if (hasWeight()) {
         titleEl.textContent = "さくらたんの体重が教えてくれるよ";
+        var rawMlForEvidence = calcPerFeedRawMl(s.weightGrams, row);
+        var perFeedForEvidence = clamp(rawMlForEvidence, row.minMl, row.maxMl);
+        var clampSentence = rawMlForEvidence !== perFeedForEvidence
+          ? "体重からの計算では" + rawMlForEvidence + "mlだけど、缶の範囲におさえて" + perFeedForEvidence + "mlにしているよ。"
+          : "";
         explainEl.textContent =
-          "1回の量は、月齢と体重の両方から決めているよ。さくらたんは" + ageLabel + "だから、1日" + feeds + "回・約" + cycleHours + "時間おきがリズムの目安。量は体重1kgあたり約" + row.coef + "ml（月齢が進むと少しずつ減っていくよ）で計算して、アイクレオの缶の範囲（" + row.minMl + "〜" + row.maxMl + "ml）におさまるように整えているから、飲みすぎの心配はないよ。";
+          "1回の量は、月齢と体重の両方から決めているよ。さくらたんは" + ageLabel + "だから、1日" + feeds + "回・約" + cycleHours + "時間おきがリズムの目安。量は体重1kgあたり約" + row.coef + "ml（月齢が進むと少しずつ減っていくよ）で計算して、アイクレオの缶の範囲（" + row.minMl + "〜" + row.maxMl + "ml）におさまるように整えているから、飲みすぎの心配はないよ。" + clampSentence;
       } else {
         titleEl.textContent = "さくらたんの月齢から計算してるよ";
         explainEl.textContent =
@@ -1209,10 +1227,14 @@
     var row = getAgeRow();
     if (!row) { el.textContent = "誕生日を入れると目安が出るよ"; return; }
     var weight = raw !== "" ? (parseInt(raw, 10) || 0) : row.stdMid;
-    var perFeed = calcPerFeedMlFromRow(weight, row);
+    var rawMl = calcPerFeedRawMl(weight, row);
+    var perFeed = clamp(rawMl, row.minMl, row.maxMl);
     var feeds = row.defFeeds;
     var cycleHours = formatHours(calcCycleMinutesForFeeds(feeds));
-    el.textContent = "1回の目安量: " + perFeed + "ml（" + cycleHours + "時間おき・1日" + feeds + "回）";
+    var clampNote = buildClampNote(row, rawMl, perFeed);
+    el.textContent = clampNote
+      ? "1回の目安量: " + perFeed + "ml（" + clampNote + "）"
+      : "1回の目安量: " + perFeed + "ml（" + cycleHours + "時間おき・1日" + feeds + "回）";
   }
   function checkWeightRange() {
     var raw = document.getElementById("set-weight").value;
