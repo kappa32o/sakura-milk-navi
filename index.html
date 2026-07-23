@@ -343,23 +343,19 @@
     var dailyTarget = calcDailyTargetMl(weightGrams, row.coef, DAILY_CAP_ML);
     return clamp(roundToUnit(dailyTarget / row.defFeeds), row.minMl, row.maxMl);
   }
-  // 今あげてOKな量。丸めた結果が40ml未満なら「まだ早い」と判定し、
-  // 40mlに達するまでの待ち時間を返す。
+  // 今あげてOKな量。経過時間に比例した量が40mlに満たないときは、
+  // 次の回のぶんから40mlを前借りする（次回時刻は時間クレジットで自動的に繰り下がる）。
   function calcIrregularAmount(perFeedMl, elapsedMinutes, cycleMinutes) {
     if (perFeedMl <= 0 || cycleMinutes <= 0) {
-      return { canGiveNow: false, okMl: 0, waitMinutes: 0 };
+      return { canGiveNow: false, okMl: 0, isAdvance: false };
     }
     var safeElapsed = Math.max(0, elapsedMinutes);
     var rawMl = perFeedMl * (safeElapsed / cycleMinutes);
     var roundedMl = clamp(roundToUnit(rawMl), 0, perFeedMl);
     if (roundedMl < MIN_IRREGULAR_ML) {
-      // 丸めて40mlになる最小の生値は35ml（四捨五入の境界）
-      var rawThresholdMl = MIN_IRREGULAR_ML - ROUND_UNIT / 2;
-      var minutesFor40 = (rawThresholdMl / perFeedMl) * cycleMinutes;
-      var waitMinutes = Math.max(0, Math.ceil(minutesFor40 - safeElapsed));
-      return { canGiveNow: false, okMl: 0, waitMinutes: waitMinutes };
+      return { canGiveNow: true, okMl: Math.min(MIN_IRREGULAR_ML, perFeedMl), isAdvance: true };
     }
-    return { canGiveNow: true, okMl: roundedMl, waitMinutes: 0 };
+    return { canGiveNow: true, okMl: roundedMl, isAdvance: false };
   }
   function calcNextIntervalMinutes(perFeedMl, givenMl, cycleMinutes) {
     if (perFeedMl <= 0) return cycleMinutes;
@@ -628,15 +624,22 @@
       if (result.canGiveNow) {
         var nextIntervalMin = calcNextIntervalMinutes(perFeed, result.okMl, getCycleMinutes());
         var nextTime = new Date(now.getTime() + nextIntervalMin * 60000);
-        answerEl.innerHTML =
-          '<p class="eyebrow">👉 今あげてOKな量</p>' +
-          '<p class="headline">' + result.okMl + "ml</p>" +
-          '<p class="subline">あげたら次は… ' + formatTime(nextTime) + " ごろに " + perFeed + "ml</p>";
+        if (result.isAdvance) {
+          answerEl.innerHTML =
+            '<p class="eyebrow">👉 次のぶんから前借りしよう</p>' +
+            '<p class="headline">' + result.okMl + "ml</p>" +
+            '<p class="subline">そのぶん、次は ' + formatTime(nextTime) + " ごろに " + perFeed + "ml だよ</p>" +
+            '<p class="subline">あわてなくて大丈夫。おしゃぶりやネムリラで落ち着くこともあるよ</p>';
+        } else {
+          answerEl.innerHTML =
+            '<p class="eyebrow">👉 今あげてOKな量</p>' +
+            '<p class="headline">' + result.okMl + "ml</p>" +
+            '<p class="subline">あげたら次は… ' + formatTime(nextTime) + " ごろに " + perFeed + "ml</p>";
+        }
         giveBtn.disabled = false;
         giveBtn.textContent = "🍼 " + result.okMl + "ml あげた";
       } else {
-        answerEl.innerHTML =
-          '<p class="wait-text">あと' + result.waitMinutes + "分で40mlあげられるよ。それまでおしゃぶりやネムリラで様子を見てみて</p>";
+        answerEl.innerHTML = '<p class="wait-text">設定で誕生日か体重を確認してね</p>';
         giveBtn.disabled = true;
         giveBtn.textContent = "🍼 あげた";
       }
