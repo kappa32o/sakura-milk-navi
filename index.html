@@ -264,6 +264,16 @@
         </div>
       </div>
       <div class="card">
+        <h3>月齢と体重の目安（女の子）</h3>
+        <div class="evidence-table-wrap">
+          <table class="evidence-table" id="months-weight-table">
+            <thead><tr><th>月齢</th><th>標準体重帯</th></tr></thead>
+            <tbody id="months-weight-tbody"></tbody>
+          </table>
+        </div>
+        <p class="note">厚生労働省の乳幼児身体発育調査をもとにした、おおよその目安だよ</p>
+      </div>
+      <div class="card">
         <h3>国のガイドも「赤ちゃんそれぞれでいい」って言ってるよ</h3>
         <p class="body-text">厚生労働省の「授乳・離乳の支援ガイド」でも、飲む量や間隔は赤ちゃんごとに違って当たり前とされているよ。数字はあくまで目安。さくらたんのご機嫌がよくて、体重が少しずつ増えていれば、それがいちばんの証拠だよ。</p>
       </div>
@@ -274,7 +284,7 @@
         <div class="field"><label for="set-birthdate">さくらたんの誕生日</label><input type="date" id="set-birthdate"></div>
         <div class="field"><label for="set-weight">体重 (g)</label><input type="number" id="set-weight" step="10"><span class="field-note">未入力のときは、誕生日からの月齢の目安で計算するよ</span></div>
         <p class="field-warn" id="weight-warn" hidden></p>
-        <p class="field-note" id="perfeed-preview">1回の目安量: --ml（3時間おき・1日8回）</p>
+        <p class="field-note" id="perfeed-preview">1回の目安量: --ml</p>
         <button class="btn btn-primary btn-block" id="btn-save-settings">保存する</button>
       </div>
       <div class="cta-stack">
@@ -320,13 +330,18 @@
   function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
   }
-  function calcDailyTotalMl(weightGrams, mlPerKgPerDay) {
-    return (weightGrams / 1000) * mlPerKgPerDay;
-  }
-  function calcPerFeedMl(weightGrams, mlPerKgPerDay, feedsPerDay) {
+  // 1回量・回数・間隔は月齢パラメータ(MONTH_PARAMS)を軸に決める。
+  // 体重は「1日あたりの目安量」を体格に合わせて微調整するための入力。
+  function calcCycleMinutesForFeeds(feedsPerDay) {
     if (!feedsPerDay) return 0;
-    var daily = calcDailyTotalMl(weightGrams, mlPerKgPerDay);
-    return roundToUnit(daily / feedsPerDay);
+    return Math.round((1440 / feedsPerDay) / 30) * 30;
+  }
+  function calcDailyTargetMl(weightGrams, coefMlPerKgPerDay, capMl) {
+    return Math.min((weightGrams / 1000) * coefMlPerKgPerDay, capMl);
+  }
+  function calcPerFeedMlFromRow(weightGrams, row) {
+    var dailyTarget = calcDailyTargetMl(weightGrams, row.coef, DAILY_CAP_ML);
+    return clamp(roundToUnit(dailyTarget / row.defFeeds), row.minMl, row.maxMl);
   }
   // 今あげてOKな量。丸めた結果が40ml未満なら「まだ早い」と判定し、
   // 40mlに達するまでの待ち時間を返す。
@@ -423,28 +438,30 @@
   }
   function getAgeRow() {
     var months = calcAgeMonths(state.settings.birthDate, new Date());
-    if (months === null) return null;
-    for (var i = 0; i < AIKUREO_TABLE.length; i++) {
-      if (months >= AIKUREO_TABLE[i].minM && months <= AIKUREO_TABLE[i].maxM) return AIKUREO_TABLE[i];
-    }
-    return AIKUREO_TABLE[AIKUREO_TABLE.length - 1];
+    return getMonthRow(months);
   }
+  function getMonthRow(months) {
+    if (months === null) return null;
+    for (var i = 0; i < MONTH_PARAMS.length; i++) {
+      if (months >= MONTH_PARAMS[i].minM && months <= MONTH_PARAMS[i].maxM) return MONTH_PARAMS[i];
+    }
+    return MONTH_PARAMS[MONTH_PARAMS.length - 1];
+  }
+  // 回数は常に月齢から決める（体重の入力有無には左右されない）
   function getFeedsPerDay() {
-    if (hasWeight()) return state.settings.feedsPerDay;
     var row = getAgeRow();
-    return row ? row.defFeeds : state.settings.feedsPerDay;
+    return row ? row.defFeeds : 0;
   }
   function getCycleMinutes() {
-    if (hasWeight()) return state.settings.cycleMinutes;
-    return Math.round(1440 / getFeedsPerDay());
+    return calcCycleMinutesForFeeds(getFeedsPerDay());
   }
   function getPerFeedMl() {
-    if (hasWeight()) return calcPerFeedMl(state.settings.weightGrams, state.settings.mlPerKgPerDay, state.settings.feedsPerDay);
     var row = getAgeRow();
-    return row ? row.defPerFeed : 0;
+    if (!row) return 0;
+    var weightForCalc = hasWeight() ? state.settings.weightGrams : row.stdMid;
+    return calcPerFeedMlFromRow(weightForCalc, row);
   }
   function getDailyTotalMl() {
-    if (hasWeight()) return calcDailyTotalMl(state.settings.weightGrams, state.settings.mlPerKgPerDay);
     return getPerFeedMl() * getFeedsPerDay();
   }
   function getSortedLogs() {
@@ -784,41 +801,68 @@
     showToast(added > 0 ? added + "件取り込んだよ" : "ぜんぶ取り込み済みだったよ");
   }
   /* ---------- 根拠画面 ---------- */
-  var AIKUREO_TABLE = [
-    { label: "0〜1ヶ月", minM: 0, maxM: 0, perFeed: "20〜80ml", times: "7〜8回", defPerFeed: 80, defFeeds: 8 },
-    { label: "1〜2ヶ月", minM: 1, maxM: 1, perFeed: "80〜120ml", times: "6回", defPerFeed: 100, defFeeds: 6 },
-    { label: "2〜3ヶ月", minM: 2, maxM: 2, perFeed: "120〜160ml", times: "6回", defPerFeed: 140, defFeeds: 6 },
-    { label: "3〜4ヶ月", minM: 3, maxM: 3, perFeed: "140〜160ml", times: "5〜6回", defPerFeed: 150, defFeeds: 6 },
-    { label: "4〜5ヶ月", minM: 4, maxM: 4, perFeed: "160〜200ml", times: "5回", defPerFeed: 180, defFeeds: 5 },
-    { label: "5〜6ヶ月", minM: 5, maxM: 5, perFeed: "200〜220ml", times: "4〜5回", defPerFeed: 210, defFeeds: 5 }
+  // minMl/maxMlはアイクレオ表示レンジの数値化、coef=ml/kg/日、
+  // stdMin/stdMax/stdMid=女の子の標準体重g（厚労省発育調査ベースの目安）
+  var MONTH_PARAMS = [
+    { label: "0〜1ヶ月", minM: 0, maxM: 0, perFeed: "20〜80ml",   times: "7〜8回", minMl: 20,  maxMl: 80,  defFeeds: 8, coef: 200, stdMin: 2900, stdMax: 4300, stdMid: 3500 },
+    { label: "1〜2ヶ月", minM: 1, maxM: 1, perFeed: "80〜120ml",  times: "6回",   minMl: 80,  maxMl: 120, defFeeds: 6, coef: 180, stdMin: 3600, stdMax: 5400, stdMid: 4400 },
+    { label: "2〜3ヶ月", minM: 2, maxM: 2, perFeed: "120〜160ml", times: "6回",   minMl: 120, maxMl: 160, defFeeds: 6, coef: 170, stdMin: 4400, stdMax: 6300, stdMid: 5300 },
+    { label: "3〜4ヶ月", minM: 3, maxM: 3, perFeed: "140〜160ml", times: "5〜6回", minMl: 140, maxMl: 160, defFeeds: 6, coef: 160, stdMin: 5000, stdMax: 7000, stdMid: 5900 },
+    { label: "4〜5ヶ月", minM: 4, maxM: 4, perFeed: "160〜200ml", times: "5回",   minMl: 160, maxMl: 200, defFeeds: 5, coef: 155, stdMin: 5400, stdMax: 7500, stdMid: 6300 },
+    { label: "5〜6ヶ月", minM: 5, maxM: 5, perFeed: "200〜220ml", times: "4〜5回", minMl: 200, maxMl: 220, defFeeds: 5, coef: 150, stdMin: 5700, stdMax: 7800, stdMid: 6600 }
   ];
+  var DAILY_CAP_ML = 1100;
+  function formatAgeLabel(months) {
+    return months === 0 ? "生後1ヶ月未満" : "生後" + months + "ヶ月";
+  }
+  function formatHours(minutes) {
+    var hours = minutes / 60;
+    return (hours % 1 === 0) ? String(hours) : hours.toFixed(1);
+  }
   function renderEvidence() {
     var s = state.settings;
     var titleEl = document.getElementById("evidence-explain-title");
     var explainEl = document.getElementById("evidence-explain");
-    if (hasWeight()) {
-      var dailyMl = Math.round(getDailyTotalMl());
-      var cycleHours = (s.cycleMinutes / 60) % 1 === 0 ? (s.cycleMinutes / 60) : (s.cycleMinutes / 60).toFixed(1);
-      titleEl.textContent = "さくらたんの体重が教えてくれるよ";
-      explainEl.textContent =
-        "赤ちゃんが1日に飲む量の目安は、体重1kgあたり約" + s.mlPerKgPerDay + "ml。いまのさくらたん（" + s.weightGrams + "g）なら、1日およそ" + dailyMl + "ml。それを" + cycleHours + "時間おき・" + s.feedsPerDay + "回にわけると、1回 " + getPerFeedMl() + "ml になるよ。設定で体重を更新すれば、量もちゃんとついてくるから安心してね。";
+    var row = getAgeRow();
+    var months = calcAgeMonths(s.birthDate, new Date());
+    var ageLabel = formatAgeLabel(months);
+    if (row) {
+      var feeds = row.defFeeds;
+      var cycleHours = formatHours(calcCycleMinutesForFeeds(feeds));
+      if (hasWeight()) {
+        titleEl.textContent = "さくらたんの体重が教えてくれるよ";
+        explainEl.textContent =
+          "1回の量は、月齢と体重の両方から決めているよ。さくらたんは" + ageLabel + "だから、1日" + feeds + "回・約" + cycleHours + "時間おきがリズムの目安。量は体重1kgあたり約" + row.coef + "ml（月齢が進むと少しずつ減っていくよ）で計算して、アイクレオの缶の範囲（" + row.minMl + "〜" + row.maxMl + "ml）におさまるように整えているから、飲みすぎの心配はないよ。";
+      } else {
+        titleEl.textContent = "さくらたんの月齢から計算してるよ";
+        explainEl.textContent =
+          "いまは誕生日（2026年7月9日）から計算した月齢と、その月齢の標準的な体重（約" + (row.stdMid / 1000).toFixed(1) + "kg）で目安を出しているよ。1回 " + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleHours + "時間おき。設定で体重を入れると、さくらたんの体にもっとぴったりの量になるよ。";
+      }
     } else {
-      var row = getAgeRow();
-      var months = calcAgeMonths(s.birthDate, new Date());
-      var ageLabel = months === 0 ? "生後1ヶ月未満" : "生後" + months + "ヶ月";
       titleEl.textContent = "さくらたんの月齢から計算してるよ";
-      explainEl.textContent = row
-        ? "いまは誕生日（2026年7月9日）から計算した月齢で目安を出しているよ。さくらたんは" + ageLabel + "だから、1回 " + row.defPerFeed + "ml・1日" + row.defFeeds + "回が目安。設定で体重を入れると、さくらたんの体にもっとぴったりの量になるよ。"
-        : "設定で誕生日か体重を入れると、ここに目安の理由が出るよ。";
+      explainEl.textContent = "設定で誕生日か体重を入れると、ここに目安の理由が出るよ。";
     }
-    var ageMonths = calcAgeMonths(state.settings.birthDate, new Date());
+    var ageMonths = months;
     var tbody = document.getElementById("aikureo-tbody");
     tbody.innerHTML = "";
-    AIKUREO_TABLE.forEach(function (row) {
+    MONTH_PARAMS.forEach(function (r) {
+      var tr = document.createElement("tr");
+      var isCurrent = ageMonths !== null && ageMonths >= r.minM && ageMonths <= r.maxM;
+      if (isCurrent) tr.className = "is-current";
+      tr.innerHTML = "<td>" + r.label + "</td><td>" + r.perFeed + "</td><td>" + r.times + "</td>";
+      tbody.appendChild(tr);
+    });
+    renderMonthsWeightTable(ageMonths);
+  }
+  function renderMonthsWeightTable(ageMonths) {
+    var tbody = document.getElementById("months-weight-tbody");
+    tbody.innerHTML = "";
+    MONTH_PARAMS.forEach(function (row) {
       var tr = document.createElement("tr");
       var isCurrent = ageMonths !== null && ageMonths >= row.minM && ageMonths <= row.maxM;
       if (isCurrent) tr.className = "is-current";
-      tr.innerHTML = "<td>" + row.label + "</td><td>" + row.perFeed + "</td><td>" + row.times + "</td>";
+      var rangeLabel = (row.stdMin / 1000).toFixed(1) + "〜" + (row.stdMax / 1000).toFixed(1) + "kg";
+      tr.innerHTML = "<td>" + row.label + "</td><td>" + rangeLabel + "</td>";
       tbody.appendChild(tr);
     });
   }
@@ -833,25 +877,24 @@
   function updatePerFeedPreview() {
     var raw = document.getElementById("set-weight").value;
     var el = document.getElementById("perfeed-preview");
-    if (raw !== "") {
-      var weight = parseInt(raw, 10) || 0;
-      var perFeed = calcPerFeedMl(weight, state.settings.mlPerKgPerDay, state.settings.feedsPerDay);
-      el.textContent = "1回の目安量: " + perFeed + "ml（体重から・3時間おき・1日8回）";
-    } else {
-      var row = getAgeRow();
-      el.textContent = row
-        ? "1回の目安量: " + row.defPerFeed + "ml（月齢" + row.label + "の目安・1日" + row.defFeeds + "回）"
-        : "誕生日か体重を入れると目安が出るよ";
-    }
+    var row = getAgeRow();
+    if (!row) { el.textContent = "誕生日を入れると目安が出るよ"; return; }
+    var weight = raw !== "" ? (parseInt(raw, 10) || 0) : row.stdMid;
+    var perFeed = calcPerFeedMlFromRow(weight, row);
+    var feeds = row.defFeeds;
+    var cycleHours = formatHours(calcCycleMinutesForFeeds(feeds));
+    el.textContent = "1回の目安量: " + perFeed + "ml（" + cycleHours + "時間おき・1日" + feeds + "回）";
   }
   function checkWeightRange() {
     var raw = document.getElementById("set-weight").value;
     var warnEl = document.getElementById("weight-warn");
     if (raw === "") { warnEl.hidden = true; return; }
     var weight = parseInt(raw, 10) || 0;
-    if (weight < 2000 || weight > 8000) {
+    var row = getAgeRow();
+    if (row && (weight < row.stdMin || weight > row.stdMax)) {
       warnEl.hidden = false;
-      warnEl.textContent = "体重が通常範囲（2000〜8000g）の外です。入力ミスがないか確認してね";
+      var months = calcAgeMonths(state.settings.birthDate, new Date());
+      warnEl.textContent = formatAgeLabel(months) + "の標準体重はだいたい" + (row.stdMin / 1000).toFixed(1) + "〜" + (row.stdMax / 1000).toFixed(1) + "kgだよ。ちがっていても個性の範囲のことが多いけど、健診で相談していると安心だね";
     } else {
       warnEl.hidden = true;
     }
