@@ -54,9 +54,17 @@
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--primary)); border-radius: 999px; transition: width 0.4s var(--ease, ease); }
   .progress-label { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
   .progress-warn { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-text); font-size: 0.84rem; font-weight: 600; }
+  .timechart-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .timechart-scroll-hint { margin: 0 0 4px; font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
   .timechart-summary { margin: 0 0 10px; color: var(--text-muted); font-size: 0.84rem; font-weight: 700; }
-  .timechart-svg-wrap { margin: 0 0 12px; }
-  .timechart-svg-wrap svg { display: block; width: 100%; height: 160px; }
+  .timechart-svg-wrap {
+    margin: 0 0 12px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin; scrollbar-color: var(--accent) transparent;
+  }
+  .timechart-svg-wrap::-webkit-scrollbar { height: 6px; }
+  .timechart-svg-wrap::-webkit-scrollbar-track { background: transparent; }
+  .timechart-svg-wrap::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 999px; }
+  .timechart-svg-wrap svg { display: block; }
   .timechart-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 2px; font-size: 0.86rem; }
   .timechart-row-actual { color: var(--text-muted); }
   .timechart-row-planned { color: var(--text); font-weight: 700; }
@@ -191,7 +199,10 @@
         <p class="progress-warn" id="progress-warn" hidden></p>
       </div>
       <div class="card" id="timechart-card">
-        <p class="eyebrow">きょうのタイムチャート</p>
+        <div class="timechart-header">
+          <p class="eyebrow">きょうのタイムチャート</p>
+          <p class="timechart-scroll-hint">← スクロールできるよ →</p>
+        </div>
         <p class="timechart-summary" id="timechart-summary"></p>
         <div class="timechart-svg-wrap" id="timechart-svg"></div>
         <div id="timechart-rows"></div>
@@ -336,7 +347,12 @@
   var MIN_IRREGULAR_ML = 40;
   var WARN_RATIO = 1.1;
   var RECORD_HISTORY_DAYS = 7;
-  var TIMECHART_SVG_W = 700;
+  var TIMECHART_HOUR_PX = 48;
+  var TIMECHART_LEFT_PAD = 36;
+  var TIMECHART_RIGHT_PAD = 70;
+  var TIMECHART_MIN_X = TIMECHART_LEFT_PAD;
+  var TIMECHART_MAX_X = TIMECHART_LEFT_PAD + 24 * TIMECHART_HOUR_PX;
+  var TIMECHART_SVG_W = TIMECHART_MAX_X + TIMECHART_RIGHT_PAD;
   var TIMECHART_SVG_H = 160;
   var TIMECHART_LABEL_GAP_PX = 30;
   var DEFAULT_PAPA_MESSAGES = [
@@ -718,7 +734,7 @@
   }
   function buildTimeChartSvg(actualRows, plannedRows, now, todayStr, perFeedMl, dailyTargetMl) {
     var W = TIMECHART_SVG_W, H = TIMECHART_SVG_H;
-    var minX = 32, maxX = W - 72;
+    var minX = TIMECHART_MIN_X, maxX = TIMECHART_MAX_X;
     var dayStart = new Date(todayStr + "T00:00:00");
     var dayEnd = new Date(dayStart.getTime() + 86400000);
     var timeToX = timeToXFactory(dayStart, minX, maxX);
@@ -826,14 +842,29 @@
       parts.push('<text x="' + nowX + '" y="' + nowLabelY + '" font-size="9" font-weight="700" fill="var(--primary-dark)" text-anchor="middle">いま</text>');
     }
 
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" preserveAspectRatio="none" role="img" aria-label="きょうのタイムチャート図">' + parts.join("") + '</svg>';
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="きょうのタイムチャート図">' + parts.join("") + '</svg>';
+  }
+  // 描画後、コンテナのスクロール位置を「いま」ラインが中央に来る位置へ合わせる。
+  // 「いま」が今日の範囲外(日付またぎ直後など)のときは何もしない。
+  function scrollTimeChartToNow(now, todayStr) {
+    var container = document.getElementById("timechart-svg");
+    if (!container) return;
+    var dayStart = new Date(todayStr + "T00:00:00");
+    var dayEnd = new Date(dayStart.getTime() + 86400000);
+    if (now < dayStart || now >= dayEnd) return;
+    var timeToX = timeToXFactory(dayStart, TIMECHART_MIN_X, TIMECHART_MAX_X);
+    var nowX = timeToX(now);
+    var maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    container.scrollLeft = clamp(nowX - container.clientWidth / 2, 0, maxScroll);
   }
   function renderTimeChart(now) {
     var data = computeTimeChartData(now);
     document.getElementById("timechart-summary").textContent =
       "実績 " + data.sumToday + "ml ・ のこり予定 " + data.remainingBudget + "ml ／ 1日の目安 " + Math.round(data.dailyTotal) + "ml";
+    var todayStr = formatDateISO(now);
     document.getElementById("timechart-svg").innerHTML =
-      buildTimeChartSvg(data.actualRows, data.plannedRows, now, formatDateISO(now), getPerFeedMl(), data.dailyTotal);
+      buildTimeChartSvg(data.actualRows, data.plannedRows, now, todayStr, getPerFeedMl(), data.dailyTotal);
+    scrollTimeChartToNow(now, todayStr);
     var rowsEl = document.getElementById("timechart-rows");
     rowsEl.innerHTML = "";
     if (data.actualRows.length === 0 && data.plannedRows.length === 0 && data.tomorrowMl <= 0) {
