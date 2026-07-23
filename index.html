@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e05780">
+<meta name="description" content="はるたんとさくらたんのための授乳サポートPWA「さくらのミルクナビ」。次の授乳タイミングや1回量の目安をやさしく教えてくれます。">
+<title>さくらのミルクナビ</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root {
+    --bg: #fff3f6;
+    --bg-gradient: linear-gradient(180deg, #fff7f9 0%, #ffeaf1 55%, #ffe1ec 100%);
+    --surface: #ffffff;
+    --surface-2: #fff0f4;
+    --text: #3a2531;
+    --text-muted: #8a6c76;
+    --primary: #e05780;
+    --primary-dark: #c23e66;
+    --primary-soft: #ffd9e6;
+    --accent: #f7a8c4;
+    --warn-bg: #fff2c9;
+    --warn-text: #7a5b06;
+    --danger: #d1495b;
+    --danger-soft: #ffe0e4;
+    --shadow-soft: 0 14px 34px -16px rgba(224, 87, 128, 0.45), 0 2px 10px rgba(58, 37, 49, 0.06);
+    --shadow-pop: 0 18px 40px -12px rgba(224, 87, 128, 0.55);
+    --radius-lg: 26px;
+    --radius-md: 18px;
+    --radius-sm: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #221319; --bg-gradient: linear-gradient(180deg, #241318 0%, #2c1720 55%, #34192a 100%); --surface: #321e28; --surface-2: #3c2431; --text: #fbe7ee; --text-muted: #d3a5b6; --primary: #ff90b6; --primary-dark: #ff729f; --primary-soft: #57293c; --accent: #ffb0cd; --warn-bg: #4a3a10; --warn-text: #ffdd88; --danger: #ff7b8a; --danger-soft: #4a2229; --shadow-soft: 0 14px 34px -16px rgba(0,0,0,0.6), 0 2px 10px rgba(0,0,0,0.4); --shadow-pop: 0 18px 40px -12px rgba(0,0,0,0.7); }
+  }
+  :root[data-theme="dark"] { --bg: #221319; --bg-gradient: linear-gradient(180deg, #241318 0%, #2c1720 55%, #34192a 100%); --surface: #321e28; --surface-2: #3c2431; --text: #fbe7ee; --text-muted: #d3a5b6; --primary: #ff90b6; --primary-dark: #ff729f; --primary-soft: #57293c; --accent: #ffb0cd; --warn-bg: #4a3a10; --warn-text: #ffdd88; --danger: #ff7b8a; --danger-soft: #4a2229; --shadow-soft: 0 14px 34px -16px rgba(0,0,0,0.6), 0 2px 10px rgba(0,0,0,0.4); --shadow-pop: 0 18px 40px -12px rgba(0,0,0,0.7); }
+  :root[data-theme="light"] { --bg: #fff3f6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app-shell { font-family: var(--font); color: var(--text); background: var(--bg-gradient); max-width: 480px; min-height: 100vh; margin: 0 auto; position: relative; padding-bottom: 96px; overflow-x: hidden; }
+  .app-header { padding: 22px 20px 16px; position: sticky; top: 0; z-index: 5; background: var(--bg-gradient); }
+  .app-title { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 0.01em; }
+  .app-title small { display: block; font-size: 0.72rem; font-weight: 500; color: var(--text-muted); margin-top: 2px; }
+  .screen { padding: 4px 0 8px; }
+  .card { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 20px 20px 22px; margin: 0 16px 16px; }
+  .eyebrow { margin: 0 0 4px; font-size: 0.74rem; font-weight: 700; color: var(--primary-dark); letter-spacing: 0.04em; }
+  .next-feed-card { text-align: center; padding-top: 24px; padding-bottom: 26px; }
+  .next-feed-time { font-size: 3rem; font-weight: 800; margin: 2px 0 4px; line-height: 1; color: var(--primary-dark); }
+  .next-feed-sub { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
+  .progress-track { background: var(--surface-2); border-radius: 999px; height: 14px; overflow: hidden; margin: 10px 0 8px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--primary)); border-radius: 999px; transition: width 0.4s var(--ease, ease); }
+  .progress-label { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
+  .progress-warn { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-text); font-size: 0.84rem; font-weight: 600; }
+  .banner {
+    margin: 0 16px 14px; padding: 14px 16px; border-radius: var(--radius-md);
+    background: var(--primary-soft); display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .banner p { margin: 0; font-size: 0.86rem; font-weight: 600; }
+  .banner button { flex-shrink: 0; }
+  .encouragement-card { background: var(--surface-2); text-align: center; }
+  .encouragement-card p { margin: 0; font-size: 0.98rem; font-weight: 600; line-height: 1.5; }
+  .cta-stack { padding: 6px 16px 4px; display: flex; flex-direction: column; gap: 12px; }
+  .btn {
+    border: none; border-radius: 999px; padding: 16px 20px; font-size: 1.02rem; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: #fff; box-shadow: var(--shadow-pop); }
+  .btn-secondary { background: var(--surface-2); color: var(--primary-dark); }
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 1.5px solid var(--surface-2); }
+  .btn-danger { background: var(--danger-soft); color: var(--danger); }
+  .btn-cry {
+    background: linear-gradient(135deg, #ffb4c6, var(--danger));
+    color: #fff; font-size: 1.18rem; padding: 22px 20px;
+    box-shadow: 0 18px 36px -10px rgba(209, 73, 91, 0.6);
+    animation: cryPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes cryPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+  .btn-block { width: 100%; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; animation: none; }
+  .feed-panel { text-align: center; }
+  .feed-panel-label { margin: 0 0 10px; color: var(--text-muted); font-size: 0.86rem; font-weight: 700; }
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
+  .stepper-btn { width: 46px; height: 46px; border-radius: 50%; border: none; background: var(--surface-2); color: var(--primary-dark); font-size: 1.1rem; font-weight: 800; cursor: pointer; }
+  .stepper-value { font-size: 1.9rem; font-weight: 800; min-width: 96px; }
+  .feed-panel-actions { display: flex; gap: 10px; }
+  .feed-panel-actions .btn { flex: 1; }
+  .link-back { background: none; border: none; color: var(--primary-dark); font-weight: 700; font-size: 0.9rem; padding: 10px 20px; cursor: pointer; }
+  .irregular-hero { text-align: center; background: linear-gradient(160deg, var(--primary-soft), var(--surface)); }
+  .irregular-title { font-size: 1.32rem; line-height: 1.5; margin: 0 0 10px; font-weight: 800; }
+  .irregular-elapsed { margin: 0; color: var(--text-muted); font-weight: 600; }
+  .irregular-answer { text-align: center; }
+  .irregular-answer .headline { font-size: 2.1rem; font-weight: 800; color: var(--primary-dark); margin: 6px 0; }
+  .irregular-answer .subline { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
+  .irregular-answer .wait-text { font-size: 1.02rem; font-weight: 700; line-height: 1.6; margin: 4px 0; }
+  .checklist summary { font-weight: 700; cursor: pointer; padding: 2px 0; }
+  .checklist ul { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .checklist label { display: flex; align-items: center; gap: 10px; font-size: 0.92rem; }
+  .papa-message { background: var(--surface-2); }
+  .papa-label { margin: 0 0 6px; font-weight: 700; color: var(--primary-dark); font-size: 0.85rem; }
+  .papa-message p:last-child { margin: 0; font-size: 1rem; line-height: 1.55; font-weight: 600; }
+  .screen-title { margin: 6px 16px 14px; font-size: 1.24rem; font-weight: 800; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; font-size: 0.92rem; font-weight: 700; color: var(--text); }
+  .field input[type="date"], .field input[type="number"], .field input[type="time"], .field textarea {
+    font-family: inherit; font-size: 1rem; padding: 11px 12px; border-radius: var(--radius-sm);
+    border: 1.5px solid var(--surface-2); background: var(--surface-2); color: var(--text);
+  }
+  .field input[type="range"] { width: 100%; accent-color: var(--primary); }
+  .field-note { font-weight: 500; color: var(--text-muted); font-size: 0.78rem; }
+  .field-warn { margin: -8px 0 12px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-text); font-size: 0.8rem; font-weight: 700; }
+  .msg-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .msg-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; }
+  .msg-item p { margin: 0; font-size: 0.9rem; line-height: 1.45; }
+  .msg-item button { flex-shrink: 0; border: none; background: none; color: var(--danger); font-weight: 700; cursor: pointer; font-size: 0.82rem; }
+  .add-msg-row { display: flex; gap: 8px; align-items: flex-start; }
+  .add-msg-row textarea { flex: 1; min-height: 44px; resize: vertical; }
+  table.evidence-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 8px; }
+  table.evidence-table th, table.evidence-table td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--surface-2); }
+  table.evidence-table th { color: var(--text-muted); font-weight: 700; }
+  table.evidence-table tr.is-current { background: var(--primary-soft); font-weight: 800; }
+  .evidence-table-wrap { overflow-x: auto; }
+  .note { margin: 12px 0 0; font-size: 0.78rem; color: var(--text-muted); }
+  .card h3 { margin: 0 0 8px; font-size: 1.02rem; }
+  .card p.body-text { line-height: 1.7; font-size: 0.9rem; margin: 0 0 8px; }
+  .record-date-group { margin: 0 16px 18px; }
+  .record-date-heading { font-size: 0.84rem; font-weight: 800; color: var(--text-muted); margin: 0 4px 8px; }
+  .record-item { background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .record-item .rec-main { display: flex; flex-direction: column; }
+  .record-item .rec-time { font-weight: 800; font-size: 1rem; }
+  .record-item .rec-ml { color: var(--text-muted); font-size: 0.82rem; }
+  .record-item .rec-tag { display: inline-block; margin-left: 6px; font-size: 0.68rem; background: var(--primary-soft); color: var(--primary-dark); padding: 2px 7px; border-radius: 999px; }
+  .rec-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .rec-actions button { border: none; border-radius: var(--radius-sm); padding: 8px 10px; font-size: 0.76rem; font-weight: 700; cursor: pointer; background: var(--surface-2); color: var(--text); }
+  .rec-actions .rec-delete { background: var(--danger-soft); color: var(--danger); }
+  .empty-state { margin: 8px 16px 20px; padding: 26px 20px; text-align: center; color: var(--text-muted); background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); font-size: 0.9rem; line-height: 1.6; }
+  .edit-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--surface-2); }
+  .edit-form .row { display: flex; gap: 8px; }
+  .edit-form input { flex: 1; padding: 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--surface-2); background: var(--surface-2); color: var(--text); font-family: inherit; }
+  .tab-nav {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 480px;
+    display: flex; background: var(--surface); box-shadow: 0 -8px 24px -12px rgba(58, 37, 49, 0.3);
+    padding: 8px 8px calc(10px + env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: none; padding: 6px 2px; font-size: 0.68rem; font-weight: 700; color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm); font-family: inherit; }
+  .tab-btn span.icon { font-size: 1.24rem; }
+  .tab-btn.is-active { color: var(--primary-dark); background: var(--primary-soft); }
+  .toast {
+    position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 12px 20px; border-radius: 999px;
+    font-size: 0.86rem; font-weight: 700; box-shadow: var(--shadow-pop); opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 40; max-width: 88%; text-align: center;
+  }
+  .toast.toast-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 340px) {
+    .next-feed-time { font-size: 2.5rem; }
+    .irregular-answer .headline { font-size: 1.8rem; }
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="app-header">
+    <h1 class="app-title">🌸 さくらのミルクナビ<small>はるたんとさくらたんのための授乳サポート</small></h1>
+  </header>
+  <main>
+    <section id="screen-home" class="screen">
+      <div id="home-banner-slot"></div>
+      <div class="card next-feed-card">
+        <p class="eyebrow">次の授乳</p>
+        <p class="next-feed-time" id="next-feed-time">--:--</p>
+        <p class="next-feed-sub" id="next-feed-sub">記録がまだありません</p>
+      </div>
+      <div class="card">
+        <p class="eyebrow">今日の合計</p>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+        <p class="progress-label" id="progress-label">0ml / 目安0ml</p>
+        <p class="progress-warn" id="progress-warn" hidden></p>
+      </div>
+      <div class="card encouragement-card">
+        <p id="encouragement-text">今日もほんとうにえらい。はるたんのペースで大丈夫</p>
+      </div>
+      <div class="card feed-panel" id="feed-panel" hidden>
+        <p class="feed-panel-label">飲んだ量を確認してね</p>
+        <div class="stepper">
+          <button class="stepper-btn" id="feed-minus" aria-label="10ml減らす">−10</button>
+          <span class="stepper-value" id="feed-value">0ml</span>
+          <button class="stepper-btn" id="feed-plus" aria-label="10ml増やす">+10</button>
+        </div>
+        <div class="feed-panel-actions">
+          <button class="btn btn-ghost" id="feed-cancel">やめる</button>
+          <button class="btn btn-primary" id="feed-confirm">記録する</button>
+        </div>
+      </div>
+      <div class="cta-stack">
+        <button class="btn btn-primary btn-block" id="btn-open-feed-panel">🍼 いま飲ませた</button>
+        <button class="btn btn-cry btn-block" id="btn-go-irregular">😭 泣き止まない…</button>
+      </div>
+    </section>
+    <section id="screen-irregular" class="screen" hidden>
+      <button class="link-back" id="irregular-back-top">← ホームへ</button>
+      <div class="card irregular-hero">
+        <h2 class="irregular-title">だいじょうぶ。<br>まずはひとつ、深呼吸🌸</h2>
+        <p class="irregular-elapsed" id="irregular-elapsed">前回の授乳から --</p>
+      </div>
+      <div class="card irregular-answer" id="irregular-answer"></div>
+      <div class="cta-stack">
+        <button class="btn btn-primary btn-block" id="irregular-give-btn">🍼 あげた</button>
+        <button class="btn btn-ghost btn-block" id="irregular-wait-btn">あげずに様子を見る</button>
+      </div>
+      <details class="card checklist">
+        <summary>ミルクの前に、ちょっとだけ確認</summary>
+        <ul>
+          <li><label><input type="checkbox"> おむつ、濡れてない？</label></li>
+          <li><label><input type="checkbox"> 暑すぎ・寒すぎない？</label></li>
+        </ul>
+      </details>
+      <div class="card papa-message">
+        <p class="papa-label">💬 パパより:</p>
+        <p id="irregular-papa-message">泣いてても大丈夫、はるたんのペースでOK</p>
+      </div>
+    </section>
+    <section id="screen-records" class="screen" hidden>
+      <h2 class="screen-title">記録一覧（今日と過去7日）</h2>
+      <div class="cta-stack" style="padding-top:0">
+        <button class="btn btn-secondary btn-block" id="btn-open-manual-add">＋ 過去の記録を追加（夜間分など）</button>
+        <button class="btn btn-secondary btn-block" id="btn-open-piyolog">📲 ぴよログから取り込む</button>
+      </div>
+      <div class="card" id="piyolog-form" hidden>
+        <p class="field-note" style="margin-bottom:8px">ぴよログの「メニュー → 記録の出力 → データのエクスポート」で1日分をコピーして、そのまま貼り付けてね。ミルクの行だけ自動で取り込むよ</p>
+        <div class="field"><textarea id="piyolog-text" rows="6" placeholder="【ぴよログ】2026/7/24(金)&#10;08:30   ミルク 80ml　…"></textarea></div>
+        <div class="feed-panel-actions">
+          <button class="btn btn-ghost" id="piyolog-cancel">やめる</button>
+          <button class="btn btn-primary" id="piyolog-import">取り込む</button>
+        </div>
+      </div>
+      <div class="card" id="manual-add-form" hidden>
+        <div class="field"><label for="manual-date">日付</label><input type="date" id="manual-date"></div>
+        <div class="field"><label for="manual-time">時刻</label><input type="time" id="manual-time"></div>
+        <div class="field"><label for="manual-ml">量 (ml)</label><input type="number" id="manual-ml" step="10" min="0"></div>
+        <div class="feed-panel-actions">
+          <button class="btn btn-ghost" id="manual-cancel">やめる</button>
+          <button class="btn btn-primary" id="manual-save">追加する</button>
+        </div>
+      </div>
+      <div id="records-list"></div>
+    </section>
+    <section id="screen-evidence" class="screen" hidden>
+      <h2 class="screen-title">💡 どうしてこの量なの？</h2>
+      <div class="card">
+        <h3 id="evidence-explain-title">さくらたんの体重が教えてくれるよ</h3>
+        <p class="body-text" id="evidence-explain"></p>
+      </div>
+      <div class="card">
+        <h3>アイクレオの缶にも、月齢の目安があるよ</h3>
+        <div class="evidence-table-wrap">
+          <table class="evidence-table" id="aikureo-table">
+            <thead><tr><th>月齢</th><th>1回量</th><th>回数/日</th></tr></thead>
+            <tbody id="aikureo-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>国のガイドも「赤ちゃんそれぞれでいい」って言ってるよ</h3>
+        <p class="body-text">厚生労働省の「授乳・離乳の支援ガイド」でも、飲む量や間隔は赤ちゃんごとに違って当たり前とされているよ。数字はあくまで目安。さくらたんのご機嫌がよくて、体重が少しずつ増えていれば、それがいちばんの証拠だよ。</p>
+      </div>
+    </section>
+    <section id="screen-settings" class="screen" hidden>
+      <h2 class="screen-title">設定</h2>
+      <div class="card">
+        <div class="field"><label for="set-birthdate">さくらたんの誕生日</label><input type="date" id="set-birthdate"></div>
+        <div class="field"><label for="set-weight">体重 (g)</label><input type="number" id="set-weight" step="10"><span class="field-note">未入力のときは、誕生日からの月齢の目安で計算するよ</span></div>
+        <p class="field-warn" id="weight-warn" hidden></p>
+        <p class="field-note" id="perfeed-preview">1回の目安量: --ml（3時間おき・1日8回）</p>
+        <button class="btn btn-primary btn-block" id="btn-save-settings">保存する</button>
+      </div>
+      <div class="cta-stack">
+        <button class="btn btn-ghost btn-block" id="btn-goto-evidence">💡 どうしてこの量なの？を見る</button>
+      </div>
+    </section>
+  </main>
+  <nav class="tab-nav">
+    <button class="tab-btn is-active" data-screen="home"><span class="icon">🏠</span>ホーム</button>
+    <button class="tab-btn" data-screen="records"><span class="icon">📋</span>記録</button>
+    <button class="tab-btn" data-screen="evidence"><span class="icon">💡</span>どうして</button>
+    <button class="tab-btn" data-screen="settings"><span class="icon">⚙️</span>設定</button>
+  </nav>
+  <div class="toast" id="toast" hidden></div>
+</div>
+<script>
+  "use strict";
+  /* ---------- 定数 ---------- */
+  var STORAGE_KEY = "sakura-milk-navi";
+  var ROUND_UNIT = 10;
+  var MIN_IRREGULAR_ML = 40;
+  var WARN_RATIO = 1.1;
+  var RECORD_HISTORY_DAYS = 7;
+  var DEFAULT_PAPA_MESSAGES = [
+    "今日もほんとうにえらい。はるたんのペースで大丈夫",
+    "泣くのはさくらたんのおしゃべり。責められてるわけじゃないよ",
+    "うまくいかない日があっても、さくらたんははるたんが大好き",
+    "ひとりで頑張りすぎないでね。パパもすぐ帰るよ"
+  ];
+  var DEFAULT_SETTINGS = {
+    birthDate: "2026-07-09",
+    weightGrams: null,
+    mlPerKgPerDay: 200,
+    cycleMinutes: 180,
+    feedsPerDay: 8,
+    papaMessages: DEFAULT_PAPA_MESSAGES.slice()
+  };
+  /* ---------- 純関数: 計算ロジック ---------- */
+  function roundToUnit(value, unit) {
+    var u = unit || ROUND_UNIT;
+    return Math.round(value / u) * u;
+  }
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+  function calcDailyTotalMl(weightGrams, mlPerKgPerDay) {
+    return (weightGrams / 1000) * mlPerKgPerDay;
+  }
+  function calcPerFeedMl(weightGrams, mlPerKgPerDay, feedsPerDay) {
+    if (!feedsPerDay) return 0;
+    var daily = calcDailyTotalMl(weightGrams, mlPerKgPerDay);
+    return roundToUnit(daily / feedsPerDay);
+  }
+  // 今あげてOKな量。丸めた結果が40ml未満なら「まだ早い」と判定し、
+  // 40mlに達するまでの待ち時間を返す。
+  function calcIrregularAmount(perFeedMl, elapsedMinutes, cycleMinutes) {
+    if (perFeedMl <= 0 || cycleMinutes <= 0) {
+      return { canGiveNow: false, okMl: 0, waitMinutes: 0 };
+    }
+    var safeElapsed = Math.max(0, elapsedMinutes);
+    var rawMl = perFeedMl * (safeElapsed / cycleMinutes);
+    var roundedMl = clamp(roundToUnit(rawMl), 0, perFeedMl);
+    if (roundedMl < MIN_IRREGULAR_ML) {
+      // 丸めて40mlになる最小の生値は35ml（四捨五入の境界）
+      var rawThresholdMl = MIN_IRREGULAR_ML - ROUND_UNIT / 2;
+      var minutesFor40 = (rawThresholdMl / perFeedMl) * cycleMinutes;
+      var waitMinutes = Math.max(0, Math.ceil(minutesFor40 - safeElapsed));
+      return { canGiveNow: false, okMl: 0, waitMinutes: waitMinutes };
+    }
+    return { canGiveNow: true, okMl: roundedMl, waitMinutes: 0 };
+  }
+  function calcNextIntervalMinutes(perFeedMl, givenMl, cycleMinutes) {
+    if (perFeedMl <= 0) return cycleMinutes;
+    return Math.round(cycleMinutes * (givenMl / perFeedMl));
+  }
+  function calcAgeMonths(birthDateStr, todayDate) {
+    if (!birthDateStr) return null;
+    var birth = new Date(birthDateStr + "T00:00:00");
+    if (isNaN(birth.getTime())) return null;
+    var today = todayDate || new Date();
+    var months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+    if (today.getDate() < birth.getDate()) months -= 1;
+    return Math.max(0, months);
+  }
+  /* ---------- 日付/時刻ユーティリティ ---------- */
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  function formatTime(date) { return pad2(date.getHours()) + ":" + pad2(date.getMinutes()); }
+  function formatDateISO(date) { return date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate()); }
+  function toLocalISO(date) { return formatDateISO(date) + "T" + pad2(date.getHours()) + ":" + pad2(date.getMinutes()); }
+  function formatDurationMinutes(totalMinutes) {
+    var m = Math.max(0, Math.round(totalMinutes));
+    var h = Math.floor(m / 60);
+    var mm = m % 60;
+    if (h <= 0) return mm + "分";
+    return h + "時間" + mm + "分";
+  }
+  function formatDateLabel(dateStr) {
+    var today = formatDateISO(new Date());
+    var yesterday = formatDateISO(new Date(Date.now() - 86400000));
+    if (dateStr === today) return "今日 (" + dateStr + ")";
+    if (dateStr === yesterday) return "きのう (" + dateStr + ")";
+    return dateStr;
+  }
+  /* ---------- 状態管理 (localStorage) ---------- */
+  var state = loadState();
+  var pendingDeleteIds = {};
+  function createDefaultState() {
+    return {
+      settings: Object.assign({}, DEFAULT_SETTINGS, { papaMessages: DEFAULT_PAPA_MESSAGES.slice() }),
+      weightHistory: [],
+      feedLogs: []
+    };
+  }
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return createDefaultState();
+      var parsed = JSON.parse(raw);
+      var settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
+      if (!Array.isArray(settings.papaMessages) || settings.papaMessages.length === 0) {
+        settings.papaMessages = DEFAULT_PAPA_MESSAGES.slice();
+      }
+      if (!settings.birthDate) settings.birthDate = DEFAULT_SETTINGS.birthDate;
+      return {
+        settings: settings,
+        weightHistory: Array.isArray(parsed.weightHistory) ? parsed.weightHistory : [],
+        feedLogs: Array.isArray(parsed.feedLogs) ? parsed.feedLogs : []
+      };
+    } catch (err) {
+      console.error("[sakura-milk-navi] 状態の読み込みに失敗しました。初期状態を使用します。", err);
+      return createDefaultState();
+    }
+  }
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (err) {
+      console.error("[sakura-milk-navi] 保存に失敗しました", err);
+      showToast("保存に失敗しました。端末の空き容量を確認してね");
+    }
+  }
+  // 回答の基準: 体重が入力されていれば体重ベース、なければ誕生日からの月齢ベース
+  function hasWeight() {
+    var w = state.settings.weightGrams;
+    return typeof w === "number" && w > 0;
+  }
+  function getAgeRow() {
+    var months = calcAgeMonths(state.settings.birthDate, new Date());
+    if (months === null) return null;
+    for (var i = 0; i < AIKUREO_TABLE.length; i++) {
+      if (months >= AIKUREO_TABLE[i].minM && months <= AIKUREO_TABLE[i].maxM) return AIKUREO_TABLE[i];
+    }
+    return AIKUREO_TABLE[AIKUREO_TABLE.length - 1];
+  }
+  function getFeedsPerDay() {
+    if (hasWeight()) return state.settings.feedsPerDay;
+    var row = getAgeRow();
+    return row ? row.defFeeds : state.settings.feedsPerDay;
+  }
+  function getCycleMinutes() {
+    if (hasWeight()) return state.settings.cycleMinutes;
+    return Math.round(1440 / getFeedsPerDay());
+  }
+  function getPerFeedMl() {
+    if (hasWeight()) return calcPerFeedMl(state.settings.weightGrams, state.settings.mlPerKgPerDay, state.settings.feedsPerDay);
+    var row = getAgeRow();
+    return row ? row.defPerFeed : 0;
+  }
+  function getDailyTotalMl() {
+    if (hasWeight()) return calcDailyTotalMl(state.settings.weightGrams, state.settings.mlPerKgPerDay);
+    return getPerFeedMl() * getFeedsPerDay();
+  }
+  function getSortedLogs() {
+    return state.feedLogs.slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+  }
+  function getLastFeedLog() {
+    var sorted = getSortedLogs();
+    return sorted.length ? sorted[0] : null;
+  }
+  function getTodayTotalMl() {
+    var todayStr = formatDateISO(new Date());
+    return state.feedLogs
+      .filter(function (l) { return l.at.slice(0, 10) === todayStr; })
+      .reduce(function (sum, l) { return sum + l.ml; }, 0);
+  }
+  function getRecentLogsByDate() {
+    var cutoff = formatDateISO(new Date(Date.now() - (RECORD_HISTORY_DAYS - 1) * 86400000));
+    var groups = {};
+    getSortedLogs().forEach(function (log) {
+      var d = log.at.slice(0, 10);
+      if (d < cutoff) return;
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(log);
+    });
+    return groups;
+  }
+  function addFeedLog(ml, atDate, irregular) {
+    var log = { id: "f" + Date.now() + Math.random().toString(16).slice(2, 8), at: toLocalISO(atDate), ml: ml, irregular: !!irregular };
+    state = Object.assign({}, state, { feedLogs: state.feedLogs.concat([log]) });
+    saveState();
+  }
+  function deleteFeedLog(id) {
+    state = Object.assign({}, state, { feedLogs: state.feedLogs.filter(function (l) { return l.id !== id; }) });
+    saveState();
+  }
+  function updateFeedLog(id, changes) {
+    state = Object.assign({}, state, {
+      feedLogs: state.feedLogs.map(function (l) { return l.id === id ? Object.assign({}, l, changes) : l; })
+    });
+    saveState();
+  }
+  /* ---------- トースト ---------- */
+  var toastTimer = null;
+  function showToast(message) {
+    var el = document.getElementById("toast");
+    el.textContent = message;
+    el.hidden = false;
+    requestAnimationFrame(function () { el.classList.add("toast-show"); });
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      el.classList.remove("toast-show");
+      setTimeout(function () { el.hidden = true; }, 250);
+    }, 2600);
+  }
+  function pickRandom(list, fallback) {
+    if (!list || list.length === 0) return fallback;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+  /* ---------- 画面切り替え ---------- */
+  var SCREENS = ["home", "irregular", "records", "evidence", "settings"];
+  function showScreen(name) {
+    SCREENS.forEach(function (s) {
+      var el = document.getElementById("screen-" + s);
+      if (el) el.hidden = s !== name;
+    });
+    document.querySelectorAll(".tab-btn").forEach(function (btn) {
+      btn.classList.toggle("is-active", btn.dataset.screen === name);
+    });
+    if (name === "home") renderHome();
+    if (name === "irregular") renderIrregular();
+    if (name === "records") renderRecords();
+    if (name === "evidence") renderEvidence();
+    if (name === "settings") renderSettings();
+    window.scrollTo(0, 0);
+  }
+  /* ---------- ホーム画面 ---------- */
+  function renderHome() {
+    var perFeed = getPerFeedMl();
+    var lastLog = getLastFeedLog();
+    var now = new Date();
+    var timeEl = document.getElementById("next-feed-time");
+    var subEl = document.getElementById("next-feed-sub");
+    if (lastLog) {
+      var intervalMin = calcNextIntervalMinutes(perFeed, lastLog.ml, getCycleMinutes());
+      var nextTime = new Date(new Date(lastLog.at).getTime() + intervalMin * 60000);
+      var remainMin = Math.round((nextTime - now) / 60000);
+      timeEl.textContent = formatTime(nextTime) + " ごろ";
+      subEl.textContent = perFeed + "ml ・ " + (remainMin > 0 ? "あと " + formatDurationMinutes(remainMin) : "そろそろの時間だよ");
+    } else {
+      timeEl.textContent = "--:--";
+      subEl.textContent = "まだ記録がないよ。記録タブから追加してね";
+    }
+    var todayTotal = getTodayTotalMl();
+    var dailyTotal = getDailyTotalMl();
+    var pct = dailyTotal > 0 ? clamp((todayTotal / dailyTotal) * 100, 0, 100) : 0;
+    document.getElementById("progress-fill").style.width = pct + "%";
+    document.getElementById("progress-label").textContent = todayTotal + "ml / 目安" + Math.round(dailyTotal) + "ml";
+    var warnEl = document.getElementById("progress-warn");
+    if (dailyTotal > 0 && todayTotal >= dailyTotal * WARN_RATIO) {
+      warnEl.hidden = false;
+      warnEl.textContent = "今日は目安より多めです。さくらたんの様子を見て、心配なら助産師さんに相談してね";
+    } else {
+      warnEl.hidden = true;
+    }
+    document.getElementById("encouragement-text").textContent =
+      pickRandom(state.settings.papaMessages, DEFAULT_PAPA_MESSAGES[0]);
+    renderNightBanner(lastLog, now);
+    var panel = document.getElementById("feed-panel");
+    if (!panel.hidden) {
+      document.getElementById("feed-value").textContent = feedPanelMl + "ml";
+    }
+  }
+  function renderNightBanner(lastLog, now) {
+    var slot = document.getElementById("home-banner-slot");
+    slot.innerHTML = "";
+    var hour = now.getHours();
+    var isMorningWindow = hour >= 5 && hour < 10;
+    var gapMinutes = lastLog ? (now - new Date(lastLog.at)) / 60000 : Infinity;
+    var looksMissing = !lastLog || gapMinutes > getCycleMinutes() + 60;
+    if (!isMorningWindow || !looksMissing) return;
+    var banner = document.createElement("div");
+    banner.className = "banner";
+    var p = document.createElement("p");
+    p.textContent = "夜間分がまだ入力されていないかも";
+    var btn = document.createElement("button");
+    btn.className = "btn btn-secondary";
+    btn.textContent = "夜間分を入力する";
+    btn.addEventListener("click", function () {
+      showScreen("records");
+      openManualAddForm();
+    });
+    banner.appendChild(p);
+    banner.appendChild(btn);
+    slot.appendChild(banner);
+  }
+  var feedPanelMl = 0;
+  function openFeedPanel() {
+    feedPanelMl = getPerFeedMl();
+    document.getElementById("feed-value").textContent = feedPanelMl + "ml";
+    document.getElementById("feed-panel").hidden = false;
+  }
+  function closeFeedPanel() {
+    document.getElementById("feed-panel").hidden = true;
+  }
+  /* ---------- イレギュラー画面 ---------- */
+  var irregularResult = null;
+  function renderIrregular() {
+    var perFeed = getPerFeedMl();
+    var lastLog = getLastFeedLog();
+    var now = new Date();
+    var answerEl = document.getElementById("irregular-answer");
+    var giveBtn = document.getElementById("irregular-give-btn");
+    if (!lastLog) {
+      document.getElementById("irregular-elapsed").textContent = "前回の授乳記録がまだありません";
+      answerEl.innerHTML = '<p class="wait-text">記録タブからひとつ記録を追加すると、ここに今あげてよい量が表示されます。</p>';
+      giveBtn.disabled = true;
+      giveBtn.textContent = "🍼 あげた";
+      irregularResult = null;
+    } else {
+      var elapsedMinutes = (now - new Date(lastLog.at)) / 60000;
+      document.getElementById("irregular-elapsed").textContent = "前回の授乳から " + formatDurationMinutes(elapsedMinutes);
+      var result = calcIrregularAmount(perFeed, elapsedMinutes, getCycleMinutes());
+      irregularResult = result;
+      if (result.canGiveNow) {
+        var nextIntervalMin = calcNextIntervalMinutes(perFeed, result.okMl, getCycleMinutes());
+        var nextTime = new Date(now.getTime() + nextIntervalMin * 60000);
+        answerEl.innerHTML =
+          '<p class="eyebrow">👉 今あげてOKな量</p>' +
+          '<p class="headline">' + result.okMl + "ml</p>" +
+          '<p class="subline">あげたら次は… ' + formatTime(nextTime) + " ごろに " + perFeed + "ml</p>";
+        giveBtn.disabled = false;
+        giveBtn.textContent = "🍼 " + result.okMl + "ml あげた";
+      } else {
+        answerEl.innerHTML =
+          '<p class="wait-text">あと' + result.waitMinutes + "分で40mlあげられるよ。それまで抱っこやおむつチェックで様子を見てみて</p>";
+        giveBtn.disabled = true;
+        giveBtn.textContent = "🍼 あげた";
+      }
+    }
+    document.getElementById("irregular-papa-message").textContent =
+      pickRandom(state.settings.papaMessages, "泣いてても大丈夫、はるたんのペースでOK");
+  }
+  function confirmIrregularGive() {
+    if (!irregularResult || !irregularResult.canGiveNow) return;
+    addFeedLog(irregularResult.okMl, new Date(), true);
+    showToast("記録したよ。よくがんばったね");
+    showScreen("home");
+  }
+  /* ---------- 記録一覧 ---------- */
+  function renderRecords() {
+    var listEl = document.getElementById("records-list");
+    listEl.innerHTML = "";
+    var groups = getRecentLogsByDate();
+    var dates = Object.keys(groups).sort(function (a, b) { return b.localeCompare(a); });
+    if (dates.length === 0) {
+      var empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "まだ記録がありません。「＋ 過去の記録を追加」から入力できます。";
+      listEl.appendChild(empty);
+      return;
+    }
+    dates.forEach(function (d) {
+      var group = document.createElement("div");
+      group.className = "record-date-group";
+      var heading = document.createElement("p");
+      heading.className = "record-date-heading";
+      heading.textContent = formatDateLabel(d);
+      group.appendChild(heading);
+      groups[d].forEach(function (log) {
+        group.appendChild(renderRecordItem(log));
+      });
+      listEl.appendChild(group);
+    });
+  }
+  function renderRecordItem(log) {
+    var item = document.createElement("div");
+    item.className = "record-item";
+    var time = log.at.slice(11, 16);
+    var tag = log.irregular ? '<span class="rec-tag">イレギュラー</span>' : "";
+    item.innerHTML =
+      '<div class="rec-main"><span class="rec-time">' + time + tag + '</span>' +
+      '<span class="rec-ml">' + log.ml + "ml</span></div>";
+    var actions = document.createElement("div");
+    actions.className = "rec-actions";
+    var editBtn = document.createElement("button");
+    editBtn.textContent = "修正";
+    editBtn.addEventListener("click", function () { toggleEditForm(item, log); });
+    var delBtn = document.createElement("button");
+    delBtn.className = "rec-delete";
+    delBtn.textContent = pendingDeleteIds[log.id] ? "本当に削除？" : "削除";
+    delBtn.addEventListener("click", function () { handleDeleteClick(log.id); });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    item.appendChild(actions);
+    return item;
+  }
+  function handleDeleteClick(id) {
+    if (pendingDeleteIds[id]) {
+      delete pendingDeleteIds[id];
+      deleteFeedLog(id);
+      showToast("削除したよ");
+      renderRecords();
+      return;
+    }
+    pendingDeleteIds[id] = true;
+    renderRecords();
+    setTimeout(function () {
+      if (pendingDeleteIds[id]) {
+        delete pendingDeleteIds[id];
+        renderRecords();
+      }
+    }, 4000);
+  }
+  function toggleEditForm(item, log) {
+    var existing = item.querySelector(".edit-form");
+    if (existing) { existing.remove(); return; }
+    var form = document.createElement("div");
+    form.className = "edit-form";
+    var timeVal = log.at.slice(11, 16);
+    form.innerHTML =
+      '<div class="row"><input type="time" value="' + timeVal + '" class="edit-time">' +
+      '<input type="number" step="10" value="' + log.ml + '" class="edit-ml"></div>' +
+      '<div class="feed-panel-actions"><button class="btn btn-ghost edit-cancel">やめる</button>' +
+      '<button class="btn btn-primary edit-save">保存</button></div>';
+    item.appendChild(form);
+    form.querySelector(".edit-cancel").addEventListener("click", function () { form.remove(); });
+    form.querySelector(".edit-save").addEventListener("click", function () {
+      var newTime = form.querySelector(".edit-time").value;
+      var newMl = parseInt(form.querySelector(".edit-ml").value, 10);
+      if (!newTime || isNaN(newMl)) { showToast("時刻と量を確認してね"); return; }
+      updateFeedLog(log.id, { at: log.at.slice(0, 10) + "T" + newTime, ml: newMl });
+      showToast("修正したよ");
+      renderRecords();
+    });
+  }
+  function openManualAddForm() {
+    var now = new Date();
+    document.getElementById("manual-date").value = formatDateISO(now);
+    document.getElementById("manual-time").value = formatTime(now);
+    document.getElementById("manual-ml").value = getPerFeedMl();
+    document.getElementById("manual-add-form").hidden = false;
+  }
+  function closeManualAddForm() {
+    document.getElementById("manual-add-form").hidden = true;
+  }
+  function saveManualAdd() {
+    var date = document.getElementById("manual-date").value;
+    var time = document.getElementById("manual-time").value;
+    var ml = parseInt(document.getElementById("manual-ml").value, 10);
+    if (!date || !time || isNaN(ml) || ml <= 0) {
+      showToast("日付・時刻・量を確認してね");
+      return;
+    }
+    var atDate = new Date(date + "T" + time);
+    addFeedLog(ml, atDate, false);
+    showToast("記録を追加したよ");
+    closeManualAddForm();
+    renderRecords();
+  }
+  /* ---------- ぴよログ取り込み ---------- */
+  // エクスポートテキストから「HH:MM … ミルク XXml」行を抽出する。
+  // 日付はテキスト内の「yyyy/m/d」表記を優先し、無ければ今日として扱う。
+  function parsePiyologText(text, fallbackDateStr) {
+    var dateStr = fallbackDateStr;
+    var dateMatch = text.match(/(20\d{2})\/(\d{1,2})\/(\d{1,2})/);
+    if (dateMatch) {
+      dateStr = dateMatch[1] + "-" + pad2(parseInt(dateMatch[2], 10)) + "-" + pad2(parseInt(dateMatch[3], 10));
+    }
+    var feeds = [];
+    text.split(/\r?\n/).forEach(function (line) {
+      var m = line.match(/(\d{1,2}):(\d{2})\s.*?ミルク\s*(\d+)\s*ml/);
+      if (!m) return;
+      feeds.push({ at: dateStr + "T" + pad2(parseInt(m[1], 10)) + ":" + m[2], ml: parseInt(m[3], 10) });
+    });
+    return feeds;
+  }
+  function importPiyolog() {
+    var text = document.getElementById("piyolog-text").value;
+    if (!text.trim()) { showToast("ぴよログのテキストを貼り付けてね"); return; }
+    var feeds = parsePiyologText(text, formatDateISO(new Date()));
+    if (feeds.length === 0) {
+      showToast("ミルクの記録が見つからなかったよ。貼り付け内容を確認してね");
+      return;
+    }
+    var added = 0;
+    feeds.forEach(function (f) {
+      var isDuplicate = state.feedLogs.some(function (l) {
+        return l.ml === f.ml && Math.abs(new Date(l.at) - new Date(f.at)) < 5 * 60000;
+      });
+      if (isDuplicate) return;
+      addFeedLog(f.ml, new Date(f.at), false);
+      added++;
+    });
+    document.getElementById("piyolog-text").value = "";
+    document.getElementById("piyolog-form").hidden = true;
+    renderRecords();
+    showToast(added > 0 ? added + "件取り込んだよ" : "ぜんぶ取り込み済みだったよ");
+  }
+  /* ---------- 根拠画面 ---------- */
+  var AIKUREO_TABLE = [
+    { label: "0〜1ヶ月", minM: 0, maxM: 0, perFeed: "20〜80ml", times: "7〜8回", defPerFeed: 80, defFeeds: 8 },
+    { label: "1〜2ヶ月", minM: 1, maxM: 1, perFeed: "80〜120ml", times: "6回", defPerFeed: 100, defFeeds: 6 },
+    { label: "2〜3ヶ月", minM: 2, maxM: 2, perFeed: "120〜160ml", times: "6回", defPerFeed: 140, defFeeds: 6 },
+    { label: "3〜4ヶ月", minM: 3, maxM: 3, perFeed: "140〜160ml", times: "5〜6回", defPerFeed: 150, defFeeds: 6 },
+    { label: "4〜5ヶ月", minM: 4, maxM: 4, perFeed: "160〜200ml", times: "5回", defPerFeed: 180, defFeeds: 5 },
+    { label: "5〜6ヶ月", minM: 5, maxM: 5, perFeed: "200〜220ml", times: "4〜5回", defPerFeed: 210, defFeeds: 5 }
+  ];
+  function renderEvidence() {
+    var s = state.settings;
+    var titleEl = document.getElementById("evidence-explain-title");
+    var explainEl = document.getElementById("evidence-explain");
+    if (hasWeight()) {
+      var dailyMl = Math.round(getDailyTotalMl());
+      var cycleHours = (s.cycleMinutes / 60) % 1 === 0 ? (s.cycleMinutes / 60) : (s.cycleMinutes / 60).toFixed(1);
+      titleEl.textContent = "さくらたんの体重が教えてくれるよ";
+      explainEl.textContent =
+        "赤ちゃんが1日に飲む量の目安は、体重1kgあたり約" + s.mlPerKgPerDay + "ml。いまのさくらたん（" + s.weightGrams + "g）なら、1日およそ" + dailyMl + "ml。それを" + cycleHours + "時間おき・" + s.feedsPerDay + "回にわけると、1回 " + getPerFeedMl() + "ml になるよ。設定で体重を更新すれば、量もちゃんとついてくるから安心してね。";
+    } else {
+      var row = getAgeRow();
+      var months = calcAgeMonths(s.birthDate, new Date());
+      var ageLabel = months === 0 ? "生後1ヶ月未満" : "生後" + months + "ヶ月";
+      titleEl.textContent = "さくらたんの月齢から計算してるよ";
+      explainEl.textContent = row
+        ? "いまは誕生日（2026年7月9日）から計算した月齢で目安を出しているよ。さくらたんは" + ageLabel + "だから、1回 " + row.defPerFeed + "ml・1日" + row.defFeeds + "回が目安。設定で体重を入れると、さくらたんの体にもっとぴったりの量になるよ。"
+        : "設定で誕生日か体重を入れると、ここに目安の理由が出るよ。";
+    }
+    var ageMonths = calcAgeMonths(state.settings.birthDate, new Date());
+    var tbody = document.getElementById("aikureo-tbody");
+    tbody.innerHTML = "";
+    AIKUREO_TABLE.forEach(function (row) {
+      var tr = document.createElement("tr");
+      var isCurrent = ageMonths !== null && ageMonths >= row.minM && ageMonths <= row.maxM;
+      if (isCurrent) tr.className = "is-current";
+      tr.innerHTML = "<td>" + row.label + "</td><td>" + row.perFeed + "</td><td>" + row.times + "</td>";
+      tbody.appendChild(tr);
+    });
+  }
+  /* ---------- 設定画面 ---------- */
+  function renderSettings() {
+    var s = state.settings;
+    document.getElementById("set-birthdate").value = s.birthDate || "";
+    document.getElementById("set-weight").value = hasWeight() ? s.weightGrams : "";
+    updatePerFeedPreview();
+    checkWeightRange();
+  }
+  function updatePerFeedPreview() {
+    var raw = document.getElementById("set-weight").value;
+    var el = document.getElementById("perfeed-preview");
+    if (raw !== "") {
+      var weight = parseInt(raw, 10) || 0;
+      var perFeed = calcPerFeedMl(weight, state.settings.mlPerKgPerDay, state.settings.feedsPerDay);
+      el.textContent = "1回の目安量: " + perFeed + "ml（体重から・3時間おき・1日8回）";
+    } else {
+      var row = getAgeRow();
+      el.textContent = row
+        ? "1回の目安量: " + row.defPerFeed + "ml（月齢" + row.label + "の目安・1日" + row.defFeeds + "回）"
+        : "誕生日か体重を入れると目安が出るよ";
+    }
+  }
+  function checkWeightRange() {
+    var raw = document.getElementById("set-weight").value;
+    var warnEl = document.getElementById("weight-warn");
+    if (raw === "") { warnEl.hidden = true; return; }
+    var weight = parseInt(raw, 10) || 0;
+    if (weight < 2000 || weight > 8000) {
+      warnEl.hidden = false;
+      warnEl.textContent = "体重が通常範囲（2000〜8000g）の外です。入力ミスがないか確認してね";
+    } else {
+      warnEl.hidden = true;
+    }
+  }
+  function saveSettings() {
+    var weightRaw = document.getElementById("set-weight").value;
+    var birthDate = document.getElementById("set-birthdate").value;
+    var weightGrams = null;
+    if (weightRaw !== "") {
+      weightGrams = parseInt(weightRaw, 10);
+      if (isNaN(weightGrams) || weightGrams <= 0) {
+        showToast("体重を確認してね");
+        return;
+      }
+    }
+    var prevWeight = state.settings.weightGrams;
+    state = Object.assign({}, state, {
+      settings: Object.assign({}, state.settings, { birthDate: birthDate, weightGrams: weightGrams })
+    });
+    if (weightGrams && weightGrams !== prevWeight) {
+      state = Object.assign({}, state, {
+        weightHistory: state.weightHistory.concat([{ date: formatDateISO(new Date()), grams: weightGrams }])
+      });
+    }
+    saveState();
+    showToast("設定を保存したよ");
+    renderSettings();
+  }
+  /* ---------- 初期化 ---------- */
+  function init() {
+    document.querySelectorAll(".tab-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () { showScreen(btn.dataset.screen); });
+    });
+    document.getElementById("btn-open-feed-panel").addEventListener("click", openFeedPanel);
+    document.getElementById("feed-cancel").addEventListener("click", closeFeedPanel);
+    document.getElementById("feed-minus").addEventListener("click", function () {
+      feedPanelMl = Math.max(0, feedPanelMl - 10);
+      document.getElementById("feed-value").textContent = feedPanelMl + "ml";
+    });
+    document.getElementById("feed-plus").addEventListener("click", function () {
+      feedPanelMl = feedPanelMl + 10;
+      document.getElementById("feed-value").textContent = feedPanelMl + "ml";
+    });
+    document.getElementById("feed-confirm").addEventListener("click", function () {
+      if (feedPanelMl <= 0) { showToast("量が0mlだよ。+10で調整してね"); return; }
+      addFeedLog(feedPanelMl, new Date(), false);
+      closeFeedPanel();
+      showToast("記録したよ。おつかれさま");
+      renderHome();
+    });
+    document.getElementById("btn-go-irregular").addEventListener("click", function () { showScreen("irregular"); });
+    document.getElementById("irregular-back-top").addEventListener("click", function () { showScreen("home"); });
+    document.getElementById("irregular-wait-btn").addEventListener("click", function () { showScreen("home"); });
+    document.getElementById("irregular-give-btn").addEventListener("click", confirmIrregularGive);
+    document.getElementById("btn-open-manual-add").addEventListener("click", openManualAddForm);
+    document.getElementById("btn-open-piyolog").addEventListener("click", function () {
+      document.getElementById("piyolog-form").hidden = false;
+    });
+    document.getElementById("piyolog-cancel").addEventListener("click", function () {
+      document.getElementById("piyolog-form").hidden = true;
+    });
+    document.getElementById("piyolog-import").addEventListener("click", importPiyolog);
+    document.getElementById("manual-cancel").addEventListener("click", closeManualAddForm);
+    document.getElementById("manual-save").addEventListener("click", saveManualAdd);
+    document.getElementById("btn-goto-evidence").addEventListener("click", function () { showScreen("evidence"); });
+    document.getElementById("set-weight").addEventListener("input", function () { checkWeightRange(); updatePerFeedPreview(); });
+    document.getElementById("btn-save-settings").addEventListener("click", saveSettings);
+    showScreen("home");
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").catch(function (err) {
+        console.error("[sakura-milk-navi] Service Worker登録に失敗しました", err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
