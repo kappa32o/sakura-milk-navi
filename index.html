@@ -54,6 +54,14 @@
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--primary)); border-radius: 999px; transition: width 0.4s var(--ease, ease); }
   .progress-label { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
   .progress-warn { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-text); font-size: 0.84rem; font-weight: 600; }
+  .timechart-summary { margin: 0 0 10px; color: var(--text-muted); font-size: 0.84rem; font-weight: 700; }
+  .timechart-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 2px; font-size: 0.86rem; }
+  .timechart-row-actual { color: var(--text-muted); }
+  .timechart-row-planned { color: var(--text); font-weight: 700; }
+  .timechart-row-planned.is-next { color: var(--primary-dark); font-weight: 800; background: var(--primary-soft); border-radius: var(--radius-sm); padding: 9px 10px; }
+  .timechart-row-tomorrow { color: var(--text-muted); font-style: italic; }
+  .timechart-tag { display: inline-block; margin-left: 6px; font-size: 0.68rem; background: var(--primary-soft); color: var(--primary-dark); padding: 2px 7px; border-radius: 999px; }
+  .timechart-empty { margin: 0; color: var(--text-muted); font-size: 0.86rem; padding: 4px 2px; }
   .banner {
     margin: 0 16px 14px; padding: 14px 16px; border-radius: var(--radius-md);
     background: var(--primary-soft); display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -180,15 +188,20 @@
         <p class="progress-label" id="progress-label">0ml / 目安0ml</p>
         <p class="progress-warn" id="progress-warn" hidden></p>
       </div>
+      <div class="card" id="timechart-card">
+        <p class="eyebrow">きょうのタイムチャート</p>
+        <p class="timechart-summary" id="timechart-summary"></p>
+        <div id="timechart-rows"></div>
+      </div>
       <div class="card encouragement-card">
         <p id="encouragement-text">今日もほんとうにえらい。はるたんのペースで大丈夫</p>
       </div>
       <div class="card feed-panel" id="feed-panel" hidden>
         <p class="feed-panel-label">飲んだ量を確認してね</p>
         <div class="stepper">
-          <button class="stepper-btn" id="feed-minus" aria-label="10ml減らす">−10</button>
+          <button class="stepper-btn" id="feed-minus" aria-label="5ml減らす">−5</button>
           <span class="stepper-value" id="feed-value">0ml</span>
-          <button class="stepper-btn" id="feed-plus" aria-label="10ml増やす">+10</button>
+          <button class="stepper-btn" id="feed-plus" aria-label="5ml増やす">+5</button>
         </div>
         <div class="feed-panel-actions">
           <button class="btn btn-ghost" id="feed-cancel">やめる</button>
@@ -207,6 +220,18 @@
         <p class="irregular-elapsed" id="irregular-elapsed">前回の授乳から --</p>
       </div>
       <div class="card irregular-answer" id="irregular-answer"></div>
+      <div class="card feed-panel" id="irregular-feed-panel" hidden>
+        <p class="feed-panel-label">飲んだ量を確認してね</p>
+        <div class="stepper">
+          <button class="stepper-btn" id="irregular-feed-minus" aria-label="5ml減らす">−5</button>
+          <span class="stepper-value" id="irregular-feed-value">0ml</span>
+          <button class="stepper-btn" id="irregular-feed-plus" aria-label="5ml増やす">+5</button>
+        </div>
+        <div class="feed-panel-actions">
+          <button class="btn btn-ghost" id="irregular-feed-cancel">やめる</button>
+          <button class="btn btn-primary" id="irregular-feed-confirm">記録する</button>
+        </div>
+      </div>
       <div class="cta-stack">
         <button class="btn btn-primary btn-block" id="irregular-give-btn">🍼 あげた</button>
         <button class="btn btn-ghost btn-block" id="irregular-wait-btn">あげずに様子を見る</button>
@@ -360,6 +385,19 @@
   function calcNextIntervalMinutes(perFeedMl, givenMl, cycleMinutes) {
     if (perFeedMl <= 0) return cycleMinutes;
     return Math.round(cycleMinutes * (givenMl / perFeedMl));
+  }
+  // v3: 1日予算制のスケジューラ本体。純関数として全画面（ホーム/イレギュラー/タイムチャート）で共通使用する。
+  // R（残り予算）が20ml未満なら「きょうの目安ぶんは完了」として扱う。
+  function calcNextFeed(lastLog, perFeedMl, cycleMinutes, remainingMl, now) {
+    if (remainingMl < 20) return { done: true };
+    if (!lastLog) {
+      return { time: now, ml: roundToUnit(Math.min(perFeedMl, remainingMl)) };
+    }
+    var ratio = clamp(lastLog.ml / perFeedMl, 0.25, 1);
+    var time = new Date(new Date(lastLog.at).getTime() + cycleMinutes * ratio * 60000);
+    var ml = lastLog.irregular ? clamp(perFeedMl - lastLog.ml, 20, perFeedMl) : perFeedMl;
+    ml = roundToUnit(Math.min(ml, remainingMl));
+    return { time: time, ml: ml };
   }
   function calcAgeMonths(birthDateStr, todayDate) {
     if (!birthDateStr) return null;
@@ -536,22 +574,23 @@
   /* ---------- ホーム画面 ---------- */
   function renderHome() {
     var perFeed = getPerFeedMl();
+    var cycle = getCycleMinutes();
     var lastLog = getLastFeedLog();
     var now = new Date();
     var timeEl = document.getElementById("next-feed-time");
     var subEl = document.getElementById("next-feed-sub");
-    if (lastLog) {
-      var intervalMin = calcNextIntervalMinutes(perFeed, lastLog.ml, getCycleMinutes());
-      var nextTime = new Date(new Date(lastLog.at).getTime() + intervalMin * 60000);
-      var remainMin = Math.round((nextTime - now) / 60000);
-      timeEl.textContent = formatTime(nextTime) + " ごろ";
-      subEl.textContent = perFeed + "ml ・ " + (remainMin > 0 ? "あと " + formatDurationMinutes(remainMin) : "そろそろの時間だよ");
-    } else {
-      timeEl.textContent = "--:--";
-      subEl.textContent = "まだ記録がないよ。記録タブから追加してね";
-    }
     var todayTotal = getTodayTotalMl();
     var dailyTotal = getDailyTotalMl();
+    var remainingBudget = Math.max(0, dailyTotal - todayTotal);
+    var nextFeed = (perFeed > 0 && cycle > 0) ? calcNextFeed(lastLog, perFeed, cycle, remainingBudget, now) : { done: true };
+    if (nextFeed.done) {
+      timeEl.textContent = "🌸";
+      subEl.textContent = "きょうの目安ぶんは完了🌸 よくがんばったね";
+    } else {
+      var remainMin = Math.round((nextFeed.time - now) / 60000);
+      timeEl.textContent = formatTime(nextFeed.time) + " ごろ";
+      subEl.textContent = nextFeed.ml + "ml ・ " + (remainMin > 0 ? "あと " + formatDurationMinutes(remainMin) : "そろそろの時間だよ");
+    }
     var pct = dailyTotal > 0 ? clamp((todayTotal / dailyTotal) * 100, 0, 100) : 0;
     document.getElementById("progress-fill").style.width = pct + "%";
     document.getElementById("progress-label").textContent = todayTotal + "ml / 目安" + Math.round(dailyTotal) + "ml";
@@ -569,6 +608,7 @@
     if (!panel.hidden) {
       document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     }
+    renderTimeChart(now);
   }
   function renderNightBanner(lastLog, now) {
     var slot = document.getElementById("home-banner-slot");
@@ -595,17 +635,111 @@
   }
   var feedPanelMl = 0;
   function openFeedPanel() {
-    feedPanelMl = getPerFeedMl();
+    var perFeed = getPerFeedMl();
+    var remainingBudget = Math.max(0, getDailyTotalMl() - getTodayTotalMl());
+    feedPanelMl = remainingBudget < 20 ? perFeed : roundToUnit(Math.min(perFeed, remainingBudget), 5);
     document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     document.getElementById("feed-panel").hidden = false;
   }
   function closeFeedPanel() {
     document.getElementById("feed-panel").hidden = true;
   }
+  /* ---------- きょうのタイムチャート ---------- */
+  // 実績(今日の記録)と、calcNextFeedを起点に cycle 間隔で残り予算Rを前から配分した予定を1本のリストにする。
+  function computeTimeChartData(now) {
+    var perFeed = getPerFeedMl();
+    var cycle = getCycleMinutes();
+    var dailyTotal = getDailyTotalMl();
+    var todayStr = formatDateISO(now);
+    var todayLogs = state.feedLogs
+      .filter(function (l) { return l.at.slice(0, 10) === todayStr; })
+      .slice()
+      .sort(function (a, b) { return new Date(a.at) - new Date(b.at); });
+    var sumToday = todayLogs.reduce(function (sum, l) { return sum + l.ml; }, 0);
+    var remainingBudget = Math.max(0, dailyTotal - sumToday);
+    var lastLog = getLastFeedLog();
+    var nextFeed = (perFeed > 0 && cycle > 0) ? calcNextFeed(lastLog, perFeed, cycle, remainingBudget, now) : { done: true };
+    var actualRows = todayLogs.map(function (l) {
+      return { time: new Date(l.at), ml: l.ml, irregular: !!l.irregular };
+    });
+    var plannedRows = [];
+    var tomorrowMl = 0;
+    if (!nextFeed.done) {
+      var tomorrowStart = new Date(new Date(todayStr + "T00:00:00").getTime() + 86400000);
+      var t = nextFeed.time;
+      var ml = nextFeed.ml;
+      var allocated = 0;
+      var rows = [];
+      var guard = 0;
+      while (ml > 0 && guard < 200) {
+        guard++;
+        rows.push({ time: t, ml: ml, isTomorrow: t >= tomorrowStart });
+        allocated += ml;
+        var remaining = remainingBudget - allocated;
+        if (remaining <= 0) break;
+        if (remaining < 20) {
+          rows[rows.length - 1].ml += remaining;
+          break;
+        }
+        t = new Date(t.getTime() + cycle * 60000);
+        ml = roundToUnit(Math.min(perFeed, remaining));
+      }
+      rows.forEach(function (r) {
+        if (r.isTomorrow) { tomorrowMl += r.ml; } else { plannedRows.push({ time: r.time, ml: r.ml }); }
+      });
+    }
+    return {
+      sumToday: sumToday,
+      remainingBudget: remainingBudget,
+      dailyTotal: dailyTotal,
+      actualRows: actualRows,
+      plannedRows: plannedRows,
+      tomorrowMl: tomorrowMl,
+      done: !!nextFeed.done
+    };
+  }
+  function renderTimeChart(now) {
+    var data = computeTimeChartData(now);
+    document.getElementById("timechart-summary").textContent =
+      "実績 " + data.sumToday + "ml ・ のこり予定 " + data.remainingBudget + "ml ／ 1日の目安 " + Math.round(data.dailyTotal) + "ml";
+    var rowsEl = document.getElementById("timechart-rows");
+    rowsEl.innerHTML = "";
+    if (data.actualRows.length === 0 && data.plannedRows.length === 0 && data.tomorrowMl <= 0) {
+      var empty = document.createElement("p");
+      empty.className = "timechart-empty";
+      empty.textContent = data.done ? "きょうの予定ぶんは完了だよ🌸" : "まだ記録がないよ。記録すると、ここに1日の予定が表示されるよ";
+      rowsEl.appendChild(empty);
+      return;
+    }
+    data.actualRows.forEach(function (r) {
+      var row = document.createElement("div");
+      row.className = "timechart-row timechart-row-actual";
+      var tag = r.irregular ? '<span class="timechart-tag">前借り</span>' : "";
+      row.innerHTML = "<span>✅ " + formatTime(r.time) + tag + "</span><span>" + r.ml + "ml</span>";
+      rowsEl.appendChild(row);
+    });
+    data.plannedRows.forEach(function (r, i) {
+      var row = document.createElement("div");
+      row.className = "timechart-row timechart-row-planned" + (i === 0 ? " is-next" : "");
+      row.innerHTML = "<span>🔜 " + formatTime(r.time) + "</span><span>" + r.ml + "ml</span>";
+      rowsEl.appendChild(row);
+    });
+    if (data.tomorrowMl > 0) {
+      var tRow = document.createElement("div");
+      tRow.className = "timechart-row timechart-row-tomorrow";
+      tRow.innerHTML = "<span>🌙 あすのぶんへ</span><span>" + data.tomorrowMl + "ml</span>";
+      rowsEl.appendChild(tRow);
+    }
+  }
   /* ---------- イレギュラー画面 ---------- */
   var irregularResult = null;
   function renderIrregular() {
+    closeIrregularFeedPanel();
     var perFeed = getPerFeedMl();
+    var cycle = getCycleMinutes();
+    var dailyTotal = getDailyTotalMl();
+    var todayTotal = getTodayTotalMl();
+    var remainingBudget = Math.max(0, dailyTotal - todayTotal);
     var lastLog = getLastFeedLog();
     var now = new Date();
     var answerEl = document.getElementById("irregular-answer");
@@ -619,37 +753,63 @@
     } else {
       var elapsedMinutes = (now - new Date(lastLog.at)) / 60000;
       document.getElementById("irregular-elapsed").textContent = "前回の授乳から " + formatDurationMinutes(elapsedMinutes);
-      var result = calcIrregularAmount(perFeed, elapsedMinutes, getCycleMinutes());
-      irregularResult = result;
-      if (result.canGiveNow) {
-        var nextIntervalMin = calcNextIntervalMinutes(perFeed, result.okMl, getCycleMinutes());
-        var nextTime = new Date(now.getTime() + nextIntervalMin * 60000);
-        if (result.isAdvance) {
-          answerEl.innerHTML =
-            '<p class="eyebrow">👉 次のぶんから前借りしよう</p>' +
-            '<p class="headline">' + result.okMl + "ml</p>" +
-            '<p class="subline">そのぶん、次は ' + formatTime(nextTime) + " ごろに " + perFeed + "ml だよ</p>" +
-            '<p class="subline">あわてなくて大丈夫。おしゃぶりやネムリラで落ち着くこともあるよ</p>';
-        } else {
-          answerEl.innerHTML =
-            '<p class="eyebrow">👉 今あげてOKな量</p>' +
-            '<p class="headline">' + result.okMl + "ml</p>" +
-            '<p class="subline">あげたら次は… ' + formatTime(nextTime) + " ごろに " + perFeed + "ml</p>";
-        }
-        giveBtn.disabled = false;
-        giveBtn.textContent = "🍼 " + result.okMl + "ml あげた";
-      } else {
-        answerEl.innerHTML = '<p class="wait-text">設定で誕生日か体重を確認してね</p>';
+      if (remainingBudget < 20) {
+        answerEl.innerHTML = '<p class="wait-text">きょうの目安ぶんは、もうあげきっているよ。白湯やおしゃぶり、外の空気で気分転換もためしてみてね。それでも心配なときは助産師さんに相談を</p>';
         giveBtn.disabled = true;
         giveBtn.textContent = "🍼 あげた";
+        irregularResult = null;
+      } else {
+        var result = calcIrregularAmount(perFeed, elapsedMinutes, cycle);
+        if (result.canGiveNow) {
+          result = Object.assign({}, result, { okMl: roundToUnit(Math.min(result.okMl, remainingBudget)) });
+        }
+        irregularResult = result;
+        if (result.canGiveNow) {
+          // 前借り後を想定した仮のlastLogでcalcNextFeedを計算し、記録後の実際の次回表示と一致させる。
+          var hypotheticalLog = { at: toLocalISO(now), ml: result.okMl, irregular: true };
+          var remainingAfterGive = Math.max(0, dailyTotal - (todayTotal + result.okMl));
+          var nextFeed = calcNextFeed(hypotheticalLog, perFeed, cycle, remainingAfterGive, now);
+          var nextText = nextFeed.done
+            ? "これで、きょうの目安ぶんは完了になりそうだよ"
+            : formatTime(nextFeed.time) + " ごろに " + nextFeed.ml + "ml";
+          if (result.isAdvance) {
+            answerEl.innerHTML =
+              '<p class="eyebrow">👉 次のぶんから前借りしよう</p>' +
+              '<p class="headline">' + result.okMl + "ml</p>" +
+              '<p class="subline">そのぶん、次は ' + nextText + " だよ</p>" +
+              '<p class="subline">あわてなくて大丈夫。おしゃぶりやネムリラで落ち着くこともあるよ</p>';
+          } else {
+            answerEl.innerHTML =
+              '<p class="eyebrow">👉 今あげてOKな量</p>' +
+              '<p class="headline">' + result.okMl + "ml</p>" +
+              '<p class="subline">あげたら次は… ' + nextText + '</p>';
+          }
+          giveBtn.disabled = false;
+          giveBtn.textContent = "🍼 " + result.okMl + "ml あげた";
+        } else {
+          answerEl.innerHTML = '<p class="wait-text">設定で誕生日か体重を確認してね</p>';
+          giveBtn.disabled = true;
+          giveBtn.textContent = "🍼 あげた";
+        }
       }
     }
     document.getElementById("irregular-papa-message").textContent =
       pickRandom(state.settings.papaMessages, "泣いてても大丈夫、はるたんのペースでOK");
   }
-  function confirmIrregularGive() {
+  var irregularFeedMl = 0;
+  function openIrregularFeedPanel() {
     if (!irregularResult || !irregularResult.canGiveNow) return;
-    addFeedLog(irregularResult.okMl, new Date(), true);
+    irregularFeedMl = irregularResult.okMl;
+    document.getElementById("irregular-feed-value").textContent = irregularFeedMl + "ml";
+    document.getElementById("irregular-feed-panel").hidden = false;
+  }
+  function closeIrregularFeedPanel() {
+    document.getElementById("irregular-feed-panel").hidden = true;
+  }
+  function confirmIrregularGive() {
+    if (irregularFeedMl < 5) { showToast("量を確認してね"); return; }
+    addFeedLog(irregularFeedMl, new Date(), true);
+    closeIrregularFeedPanel();
     showToast("記録したよ。よくがんばったね");
     showScreen("home");
   }
@@ -934,11 +1094,11 @@
     document.getElementById("btn-open-feed-panel").addEventListener("click", openFeedPanel);
     document.getElementById("feed-cancel").addEventListener("click", closeFeedPanel);
     document.getElementById("feed-minus").addEventListener("click", function () {
-      feedPanelMl = Math.max(0, feedPanelMl - 10);
+      feedPanelMl = Math.max(0, feedPanelMl - 5);
       document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     });
     document.getElementById("feed-plus").addEventListener("click", function () {
-      feedPanelMl = feedPanelMl + 10;
+      feedPanelMl = feedPanelMl + 5;
       document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     });
     document.getElementById("feed-confirm").addEventListener("click", function () {
@@ -951,7 +1111,17 @@
     document.getElementById("btn-go-irregular").addEventListener("click", function () { showScreen("irregular"); });
     document.getElementById("irregular-back-top").addEventListener("click", function () { showScreen("home"); });
     document.getElementById("irregular-wait-btn").addEventListener("click", function () { showScreen("home"); });
-    document.getElementById("irregular-give-btn").addEventListener("click", confirmIrregularGive);
+    document.getElementById("irregular-give-btn").addEventListener("click", openIrregularFeedPanel);
+    document.getElementById("irregular-feed-minus").addEventListener("click", function () {
+      irregularFeedMl = Math.max(5, irregularFeedMl - 5);
+      document.getElementById("irregular-feed-value").textContent = irregularFeedMl + "ml";
+    });
+    document.getElementById("irregular-feed-plus").addEventListener("click", function () {
+      irregularFeedMl = irregularFeedMl + 5;
+      document.getElementById("irregular-feed-value").textContent = irregularFeedMl + "ml";
+    });
+    document.getElementById("irregular-feed-cancel").addEventListener("click", closeIrregularFeedPanel);
+    document.getElementById("irregular-feed-confirm").addEventListener("click", confirmIrregularGive);
     document.getElementById("btn-open-manual-add").addEventListener("click", openManualAddForm);
     document.getElementById("btn-open-piyolog").addEventListener("click", function () {
       document.getElementById("piyolog-form").hidden = false;
