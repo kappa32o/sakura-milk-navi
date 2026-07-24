@@ -372,13 +372,20 @@
     "ひとりで頑張りすぎないでね。パパもすぐ帰るよ",
     "ミルクの量は日によって違って当たり前。ぜんぶ順調のうちだよ",
     "はるたんが休むことも、さくらたんのためになるんだよ",
-    "夜中の授乳、ほんとうにおつかれさま。はるたんは今日もすごい",
     "完璧じゃなくていい。笑ってるはるたんがさくらたんはいちばん好き",
     "困ったら助産師さんに頼っていいんだよ。頼るのも立派な育児",
     "さくらたんがすくすく育ってるのは、はるたんのおかげだよ",
     "家事はあとまわしでOK。いまはふたりのお昼寝がいちばん大事",
     "どんな一日でも、さくらたんにとってはるたんは世界一のママだよ"
   ];
+  // 夜(22時〜朝6時)だけメッセージ候補に加わる夜間専用のねぎらい
+  var NIGHT_PAPA_MESSAGES = [
+    "夜中の授乳、ほんとうにおつかれさま。はるたんは今日もすごい",
+    "真っ暗な時間にがんばってるの、パパはちゃんと知ってるよ",
+    "眠いよね。さくらたんが寝たら、はるたんもすぐ横になってね"
+  ];
+  var NIGHT_MESSAGE_START_HOUR = 22;
+  var NIGHT_MESSAGE_END_HOUR = 6;
   var DEFAULT_SETTINGS = {
     birthDate: "2026-07-09",
     weightGrams: null,
@@ -531,9 +538,11 @@
         settings.papaMessages = DEFAULT_PAPA_MESSAGES.slice();
       } else {
         // 保存済みメッセージがすべてデフォルト由来（=カスタムされていない）なら、
-        // レパートリー追加が既存端末にも届くよう最新のデフォルト一式に置き換える
+        // レパートリー追加が既存端末にも届くよう最新のデフォルト一式に置き換える。
+        // 夜間専用へ移動した旧メッセージも「デフォルト由来」とみなす。
+        var knownDefaults = DEFAULT_PAPA_MESSAGES.concat(NIGHT_PAPA_MESSAGES);
         var isAllDefault = settings.papaMessages.every(function (m) {
-          return DEFAULT_PAPA_MESSAGES.indexOf(m) !== -1;
+          return knownDefaults.indexOf(m) !== -1;
         });
         if (isAllDefault) settings.papaMessages = DEFAULT_PAPA_MESSAGES.slice();
       }
@@ -814,6 +823,29 @@
     if (!list || list.length === 0) return fallback;
     return list[Math.floor(Math.random() * list.length)];
   }
+  // 応援メッセージの候補。夜(22時〜朝6時)は夜間専用のねぎらいも候補に加わる
+  function getMessagePool(now) {
+    var pool = state.settings.papaMessages;
+    var hour = (now || new Date()).getHours();
+    if (hour >= NIGHT_MESSAGE_START_HOUR || hour < NIGHT_MESSAGE_END_HOUR) {
+      return pool.concat(NIGHT_PAPA_MESSAGES);
+    }
+    return pool;
+  }
+  // メッセージを「。」で改行して表示する（長文の見づらさ対策）
+  function setMessageWithLineBreaks(el, message) {
+    el.textContent = "";
+    var parts = String(message).split("。");
+    var lines = [];
+    parts.forEach(function (part, i) {
+      if (part === "") return;
+      lines.push(i < parts.length - 1 ? part + "。" : part);
+    });
+    lines.forEach(function (line, i) {
+      if (i > 0) el.appendChild(document.createElement("br"));
+      el.appendChild(document.createTextNode(line));
+    });
+  }
   /* ---------- 画面切り替え ---------- */
   var SCREENS = ["home", "irregular", "records", "evidence", "settings"];
   function showScreen(name) {
@@ -864,8 +896,9 @@
     } else {
       warnEl.hidden = true;
     }
-    document.getElementById("encouragement-text").textContent =
-      pickRandom(state.settings.papaMessages, DEFAULT_PAPA_MESSAGES[0]);
+    setMessageWithLineBreaks(
+      document.getElementById("encouragement-text"),
+      pickRandom(getMessagePool(now), DEFAULT_PAPA_MESSAGES[0]));
     renderNightBanner(lastLog, now);
     var panel = document.getElementById("feed-panel");
     if (!panel.hidden) {
@@ -1208,8 +1241,9 @@
         }
       }
     }
-    document.getElementById("irregular-papa-message").textContent =
-      pickRandom(state.settings.papaMessages, "泣いてても大丈夫、はるたんのペースでOK");
+    setMessageWithLineBreaks(
+      document.getElementById("irregular-papa-message"),
+      pickRandom(getMessagePool(now), "泣いてても大丈夫、はるたんのペースでOK"));
   }
   var irregularFeedMl = 0;
   function openIrregularFeedPanel() {
