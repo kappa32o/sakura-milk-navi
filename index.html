@@ -214,6 +214,9 @@
         <button class="btn btn-primary btn-block" id="btn-open-feed-panel">🍼 いま飲ませた</button>
         <button class="btn btn-cry btn-block" id="btn-go-irregular">😭 泣き止まない…</button>
       </div>
+      <div class="card encouragement-card">
+        <p id="encouragement-text">今日もほんとうにえらい。はるたんのペースで大丈夫</p>
+      </div>
       <div class="card" id="timechart-card">
         <div class="timechart-header">
           <p class="eyebrow">きょうのタイムチャート</p>
@@ -222,9 +225,6 @@
         <p class="timechart-summary" id="timechart-summary"></p>
         <div class="timechart-svg-wrap" id="timechart-svg"></div>
         <div id="timechart-rows"></div>
-      </div>
-      <div class="card encouragement-card">
-        <p id="encouragement-text">今日もほんとうにえらい。はるたんのペースで大丈夫</p>
       </div>
     </section>
     <section id="screen-irregular" class="screen" hidden>
@@ -351,7 +351,11 @@
   /* ---------- 定数 ---------- */
   var STORAGE_KEY = "sakura-milk-navi";
   var ROUND_UNIT = 10;
-  var MIN_IRREGULAR_ML = 40;
+  // ミルクの胃内半減期は約78分(母乳の約2倍)。60分未満の追いミルクは
+  // 消化負担・吐き戻しリスクがあるため、ミルク以外の対処を促す。
+  var MIN_MILK_INTERVAL_MINUTES = 60;
+  // 前借りの下限は1回量の半分。さくらたんはよく飲むので固定40mlより多めに設定。
+  var ADVANCE_FLOOR_RATIO = 0.5;
   var RECORD_HISTORY_DAYS = 7;
   var TIMECHART_HOUR_PX = 48;
   var TIMECHART_LEFT_PAD = 36;
@@ -365,7 +369,15 @@
     "今日もほんとうにえらい。はるたんのペースで大丈夫",
     "泣くのはさくらたんのおしゃべり。責められてるわけじゃないよ",
     "うまくいかない日があっても、さくらたんははるたんが大好き",
-    "ひとりで頑張りすぎないでね。パパもすぐ帰るよ"
+    "ひとりで頑張りすぎないでね。パパもすぐ帰るよ",
+    "ミルクの量は日によって違って当たり前。ぜんぶ順調のうちだよ",
+    "はるたんが休むことも、さくらたんのためになるんだよ",
+    "夜中の授乳、ほんとうにおつかれさま。はるたんは今日もすごい",
+    "完璧じゃなくていい。笑ってるはるたんがさくらたんはいちばん好き",
+    "困ったら助産師さんに頼っていいんだよ。頼るのも立派な育児",
+    "さくらたんがすくすく育ってるのは、はるたんのおかげだよ",
+    "家事はあとまわしでOK。いまはふたりのお昼寝がいちばん大事",
+    "どんな一日でも、さくらたんにとってはるたんは世界一のママだよ"
   ];
   var DEFAULT_SETTINGS = {
     birthDate: "2026-07-09",
@@ -422,19 +434,26 @@
     }
     return "体重からは" + rawMl + "mlだけど、" + row.label + "のレンジ下限でおさえてるよ";
   }
-  // 今あげてOKな量。経過時間に比例した量が40mlに満たないときは、
-  // 次の回のぶんから40mlを前借りする（次回時刻は時間クレジットで自動的に繰り下がる）。
+  // 今あげてOKな量。
+  // ・前回から60分未満: ミルクは避ける表示にする(avoidMilk)。消化がまだ途中のため。
+  // ・60分以降: 経過時間に比例した量(=胃の空きぶん。ミルクの胃排出実測とほぼ一致する近似)。
+  //   それが1回量の半分に満たないときは、次の回のぶんから半量を前借りする
+  //   （次回時刻は時間クレジットで自動的に繰り下がる）。
   function calcIrregularAmount(perFeedMl, elapsedMinutes, cycleMinutes) {
     if (perFeedMl <= 0 || cycleMinutes <= 0) {
-      return { canGiveNow: false, okMl: 0, isAdvance: false };
+      return { canGiveNow: false, avoidMilk: false, okMl: 0, isAdvance: false };
     }
     var safeElapsed = Math.max(0, elapsedMinutes);
+    if (safeElapsed < MIN_MILK_INTERVAL_MINUTES) {
+      return { canGiveNow: false, avoidMilk: true, okMl: 0, isAdvance: false };
+    }
     var rawMl = perFeedMl * (safeElapsed / cycleMinutes);
     var roundedMl = clamp(roundToUnit(rawMl), 0, perFeedMl);
-    if (roundedMl < MIN_IRREGULAR_ML) {
-      return { canGiveNow: true, okMl: Math.min(MIN_IRREGULAR_ML, perFeedMl), isAdvance: true };
+    var floorMl = Math.min(roundToUnit(perFeedMl * ADVANCE_FLOOR_RATIO), perFeedMl);
+    if (roundedMl < floorMl) {
+      return { canGiveNow: true, avoidMilk: false, okMl: floorMl, isAdvance: true };
     }
-    return { canGiveNow: true, okMl: roundedMl, isAdvance: false };
+    return { canGiveNow: true, avoidMilk: false, okMl: roundedMl, isAdvance: false };
   }
   function calcNextIntervalMinutes(perFeedMl, givenMl, cycleMinutes) {
     if (perFeedMl <= 0) return cycleMinutes;
@@ -449,7 +468,8 @@
     if (!lastLog) {
       return { time: now, ml: roundToUnit(Math.min(perFeedMl, remainingMl)) };
     }
-    var ratio = clamp(lastLog.ml / perFeedMl, 0.25, 1);
+    // 下限0.5 = 少量しか飲まなくても最低半周期はあける（ミルクの胃排出半減期約78分に整合）
+    var ratio = clamp(lastLog.ml / perFeedMl, 0.5, 1);
     var time = new Date(new Date(lastLog.at).getTime() + cycleMinutes * ratio * 60000);
     var ml = roundToUnit(Math.min(perFeedMl, remainingMl));
     return { time: time, ml: ml };
@@ -509,6 +529,13 @@
       var settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
       if (!Array.isArray(settings.papaMessages) || settings.papaMessages.length === 0) {
         settings.papaMessages = DEFAULT_PAPA_MESSAGES.slice();
+      } else {
+        // 保存済みメッセージがすべてデフォルト由来（=カスタムされていない）なら、
+        // レパートリー追加が既存端末にも届くよう最新のデフォルト一式に置き換える
+        var isAllDefault = settings.papaMessages.every(function (m) {
+          return DEFAULT_PAPA_MESSAGES.indexOf(m) !== -1;
+        });
+        if (isAllDefault) settings.papaMessages = DEFAULT_PAPA_MESSAGES.slice();
       }
       if (!settings.birthDate) settings.birthDate = DEFAULT_SETTINGS.birthDate;
       return {
@@ -1141,7 +1168,15 @@
           result = Object.assign({}, result, { okMl: roundToUnit(Math.min(result.okMl, remainingBudget)) });
         }
         irregularResult = result;
-        if (result.canGiveNow) {
+        if (result.avoidMilk) {
+          var waitMinutes = Math.max(1, Math.ceil(MIN_MILK_INTERVAL_MINUTES - elapsedMinutes));
+          answerEl.innerHTML =
+            '<p class="eyebrow">🕐 いまはミルク以外がおすすめ</p>' +
+            '<p class="wait-text">前回から' + formatDurationMinutes(elapsedMinutes) + '。ミルクは消化に時間がかかるから（母乳の約2倍）、60分たつまではできればミルクは避けたい時間だよ。おしゃぶり・抱っこ・げっぷの確認・おむつチェックをためしてみてね。あと' + formatDurationMinutes(waitMinutes) + 'でミルクの案内が出せるよ。どうしてもあげたときは記録タブから入れてね</p>';
+          giveBtn.disabled = true;
+          giveBtn.textContent = "🍼 あげた";
+          irregularResult = null;
+        } else if (result.canGiveNow) {
           // 前借り後を想定した仮のlastLogでcalcNextFeedを計算し、記録後の実際の次回表示と一致させる。
           var hypotheticalLog = { at: toLocalISO(now), ml: result.okMl, irregular: true };
           var remainingAfterGive = Math.max(0, dailyTotal - (todayTotal + result.okMl));
