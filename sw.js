@@ -1,5 +1,5 @@
 "use strict";
-var CACHE_NAME = "sakura-milk-navi-v9";
+var CACHE_NAME = "sakura-milk-navi-v10";
 var PRECACHE_URLS = [
   "./",
   "./index.html",
@@ -49,6 +49,38 @@ self.addEventListener("fetch", function (event) {
         .catch(function () {
           return caches.match("./index.html");
         });
+    })
+  );
+});
+
+self.addEventListener("push", function (event) {
+  var data = { title: "🍼 さくらのミルクナビ", body: "そろそろ授乳の時間かも" };
+  if (event.data) {
+    try {
+      data = Object.assign({}, data, event.data.json());
+    } catch (err) {
+      data.body = event.data.text();
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      tag: "sakura-milk-navi-next-feed",
+      renotify: true
+    })
+  );
+});
+
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        if ("focus" in clientList[i]) return clientList[i].focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow("./");
     })
   );
 });

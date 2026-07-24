@@ -326,6 +326,11 @@
         <p class="field-note" id="perfeed-preview">1回の目安量: --ml</p>
         <button class="btn btn-primary btn-block" id="btn-save-settings">保存する</button>
       </div>
+      <div class="card">
+        <p class="eyebrow">通知</p>
+        <p class="field-note" id="push-status-text">確認中...</p>
+        <button class="btn btn-secondary btn-block" id="btn-toggle-push">通知を設定する</button>
+      </div>
       <div class="cta-stack">
         <button class="btn btn-ghost btn-block" id="btn-goto-evidence">💡 どうしてこの量なの？を見る</button>
       </div>
@@ -500,6 +505,7 @@
       console.error("[sakura-milk-navi] 保存に失敗しました", err);
       showToast("保存に失敗しました。端末の空き容量を確認してね");
     }
+    schedulePushSync();
   }
   // 回答の基準: 体重が入力されていれば体重ベース、なければ誕生日からの月齢ベース
   function hasWeight() {
@@ -573,6 +579,115 @@
     });
     saveState();
   }
+  /* ---------- プッシュ通知 ---------- */
+  // ワーカーをデプロイしたら wrangler.toml の [vars] ADMIN_CONTACT / worker/README の手順に沿って
+  // 下の3つをデプロイ後の実際の値に書き換えてね (デフォルトのままだと通知機能は無効のまま)。
+  var PUSH_SERVER_URL = "https://sakura-milk-navi-push.3232-konnoab.workers.dev";
+  var VAPID_PUBLIC_KEY = "BLr1TQv0_cVu8dY87dur3AiG0j0vwjYvd8-yZnwjB3MeOyaEj663maXi-yNkvzRbYurmZQmN4COTeYWM7IUTfbo";
+  var PUSH_SYNC_SECRET = "0cecf0786c2f31caee344440d21aa9f05d65dd841a5ff67a";
+  var PUSH_ENABLED_KEY = "sakura-milk-navi-push-enabled";
+  var PUSH_SYNC_DEBOUNCE_MS = 600;
+  var pushSyncTimer = null;
+  function isPushConfigured() {
+    return VAPID_PUBLIC_KEY.indexOf("PASTE_") !== 0 && PUSH_SERVER_URL.indexOf("YOUR-SUBDOMAIN") === -1;
+  }
+  function isPushSupported() {
+    return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  }
+  function isPushEnabled() {
+    return localStorage.getItem(PUSH_ENABLED_KEY) === "1";
+  }
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  }
+  function pushFetch(path, payload) {
+    return fetch(PUSH_SERVER_URL + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Sync-Secret": PUSH_SYNC_SECRET },
+      body: JSON.stringify(payload)
+    });
+  }
+  async function enablePushNotifications() {
+    if (!isPushConfigured()) { showToast("通知サーバーの設定がまだ完了していないよ"); return; }
+    if (!isPushSupported()) { showToast("この端末・ブラウザは通知に対応していないよ"); return; }
+    try {
+      var permission = await Notification.requestPermission();
+      if (permission !== "granted") { showToast("通知が許可されなかったよ"); return; }
+      var registration = await navigator.serviceWorker.ready;
+      var subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+      var res = await pushFetch("/subscribe", { subscription: subscription.toJSON() });
+      if (!res.ok) throw new Error("subscribe failed: " + res.status);
+      localStorage.setItem(PUSH_ENABLED_KEY, "1");
+      showToast("通知をオンにしたよ");
+      renderPushStatus();
+      syncPushSchedule();
+    } catch (err) {
+      console.error("[sakura-milk-navi] 通知の登録に失敗しました", err);
+      showToast("通知の設定に失敗したよ");
+    }
+  }
+  async function disablePushNotifications() {
+    try {
+      var registration = await navigator.serviceWorker.ready;
+      var subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await pushFetch("/unsubscribe", { subscription: subscription.toJSON() });
+        await subscription.unsubscribe();
+      }
+    } catch (err) {
+      console.error("[sakura-milk-navi] 通知の解除に失敗しました", err);
+    }
+    localStorage.removeItem(PUSH_ENABLED_KEY);
+    showToast("通知をオフにしたよ");
+    renderPushStatus();
+  }
+  function schedulePushSync() {
+    if (!isPushEnabled() || !isPushConfigured()) return;
+    clearTimeout(pushSyncTimer);
+    pushSyncTimer = setTimeout(syncPushSchedule, PUSH_SYNC_DEBOUNCE_MS);
+  }
+  async function syncPushSchedule() {
+    if (!isPushEnabled() || !isPushConfigured()) return;
+    try {
+      var registration = await navigator.serviceWorker.ready;
+      var subscription = await registration.pushManager.getSubscription();
+      if (!subscription) return;
+      var perFeed = getPerFeedMl();
+      var cycle = getCycleMinutes();
+      var lastLog = getLastFeedLog();
+      var now = new Date();
+      var remainingBudget = Math.max(0, getDailyTotalMl() - getTodayTotalMl());
+      var nextFeed = (perFeed > 0 && cycle > 0)
+        ? calcNextFeed(lastLog, perFeed, cycle, remainingBudget, now)
+        : { done: true };
+      var syncPayload = {
+        subscription: subscription.toJSON(),
+        nextFeedAt: nextFeed.done ? null : nextFeed.time.toISOString(),
+        ml: nextFeed.done ? null : nextFeed.ml,
+        done: !!nextFeed.done
+      };
+      var res = await pushFetch("/sync", syncPayload);
+      if (res.status === 404) {
+        // ワーカー側でsubscriptionレコードが失われている(送信先が期限切れで自動削除された等)ので、
+        // 再登録してからもう一度同期を試みる。
+        var resubscribeRes = await pushFetch("/subscribe", { subscription: subscription.toJSON() });
+        if (resubscribeRes.ok) await pushFetch("/sync", syncPayload);
+      }
+    } catch (err) {
+      console.error("[sakura-milk-navi] 通知スケジュールの同期に失敗しました", err);
+    }
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") schedulePushSync();
+  });
   /* ---------- トースト ---------- */
   var toastTimer = null;
   function showToast(message) {
@@ -1220,6 +1335,25 @@
     document.getElementById("set-weight").value = hasWeight() ? s.weightGrams : "";
     updatePerFeedPreview();
     checkWeightRange();
+    renderPushStatus();
+  }
+  function renderPushStatus() {
+    var statusEl = document.getElementById("push-status-text");
+    var btn = document.getElementById("btn-toggle-push");
+    if (!isPushSupported()) {
+      statusEl.textContent = "この端末・ブラウザは通知に対応していないよ";
+      btn.disabled = true;
+      btn.textContent = "通知を設定する";
+      return;
+    }
+    btn.disabled = false;
+    if (isPushEnabled()) {
+      statusEl.textContent = "次の授乳が近づいたら通知でお知らせするよ";
+      btn.textContent = "通知をオフにする";
+    } else {
+      statusEl.textContent = "次の授乳が近づいたら通知で知らせるよ";
+      btn.textContent = "通知をオンにする";
+    }
   }
   function updatePerFeedPreview() {
     var raw = document.getElementById("set-weight").value;
@@ -1321,6 +1455,9 @@
     document.getElementById("manual-cancel").addEventListener("click", closeManualAddForm);
     document.getElementById("manual-save").addEventListener("click", saveManualAdd);
     document.getElementById("btn-goto-evidence").addEventListener("click", function () { showScreen("evidence"); });
+    document.getElementById("btn-toggle-push").addEventListener("click", function () {
+      if (isPushEnabled()) { disablePushNotifications(); } else { enablePushNotifications(); }
+    });
     document.getElementById("set-weight").addEventListener("input", function () { checkWeightRange(); updatePerFeedPreview(); });
     document.getElementById("btn-save-settings").addEventListener("click", saveSettings);
     showScreen("home");
