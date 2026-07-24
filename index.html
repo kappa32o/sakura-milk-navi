@@ -329,6 +329,7 @@
       <div class="card">
         <p class="eyebrow">通知</p>
         <p class="field-note" id="push-status-text">確認中...</p>
+        <div class="field" id="push-secret-field" hidden><label for="push-secret-input">あいことば</label><input type="password" id="push-secret-input" autocomplete="off"><span class="field-note">パパから聞いたあいことばを入れてね。この端末の中にだけ保存されるよ</span></div>
         <button class="btn btn-secondary btn-block" id="btn-toggle-push">通知を設定する</button>
       </div>
       <div class="cta-stack">
@@ -580,16 +581,20 @@
     saveState();
   }
   /* ---------- プッシュ通知 ---------- */
-  // ワーカーをデプロイしたら wrangler.toml の [vars] ADMIN_CONTACT / worker/README の手順に沿って
-  // 下の3つをデプロイ後の実際の値に書き換えてね (デフォルトのままだと通知機能は無効のまま)。
+  // ワーカーをデプロイしたら worker/README の手順に沿って下の2つを実際の値に書き換えてね。
+  // どちらも公開されて問題ない値。あいことば(SYNC_SECRET)はソースに書かず、
+  // 設定画面で入力してもらってこの端末のlocalStorageにだけ保存する。
   var PUSH_SERVER_URL = "https://sakura-milk-navi-push.3232-konnoab.workers.dev";
   var VAPID_PUBLIC_KEY = "BLr1TQv0_cVu8dY87dur3AiG0j0vwjYvd8-yZnwjB3MeOyaEj663maXi-yNkvzRbYurmZQmN4COTeYWM7IUTfbo";
-  var PUSH_SYNC_SECRET = "0cecf0786c2f31caee344440d21aa9f05d65dd841a5ff67a";
   var PUSH_ENABLED_KEY = "sakura-milk-navi-push-enabled";
+  var PUSH_SECRET_KEY = "sakura-milk-navi-push-secret";
   var PUSH_SYNC_DEBOUNCE_MS = 600;
   var pushSyncTimer = null;
   function isPushConfigured() {
     return VAPID_PUBLIC_KEY.indexOf("PASTE_") !== 0 && PUSH_SERVER_URL.indexOf("YOUR-SUBDOMAIN") === -1;
+  }
+  function getPushSecret() {
+    return localStorage.getItem(PUSH_SECRET_KEY) || "";
   }
   function isPushSupported() {
     return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -608,23 +613,36 @@
   function pushFetch(path, payload) {
     return fetch(PUSH_SERVER_URL + path, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Sync-Secret": PUSH_SYNC_SECRET },
+      headers: { "Content-Type": "application/json", "X-Sync-Secret": getPushSecret() },
       body: JSON.stringify(payload)
     });
   }
   async function enablePushNotifications() {
     if (!isPushConfigured()) { showToast("通知サーバーの設定がまだ完了していないよ"); return; }
     if (!isPushSupported()) { showToast("この端末・ブラウザは通知に対応していないよ"); return; }
+    var secretInput = document.getElementById("push-secret-input");
+    var typedSecret = secretInput ? secretInput.value.trim() : "";
+    var secret = typedSecret || getPushSecret();
+    if (!secret) { showToast("あいことばを入れてね"); renderPushStatus(); return; }
     try {
       var permission = await Notification.requestPermission();
       if (permission !== "granted") { showToast("通知が許可されなかったよ"); return; }
+      // pushFetchがこの値を使うため、確認前に一旦保存する(間違っていたら401で取り消す)
+      localStorage.setItem(PUSH_SECRET_KEY, secret);
       var registration = await navigator.serviceWorker.ready;
       var subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
       var res = await pushFetch("/subscribe", { subscription: subscription.toJSON() });
+      if (res.status === 401) {
+        localStorage.removeItem(PUSH_SECRET_KEY);
+        showToast("あいことばが違うみたい。もう一度確認してね");
+        renderPushStatus();
+        return;
+      }
       if (!res.ok) throw new Error("subscribe failed: " + res.status);
+      if (secretInput) secretInput.value = "";
       localStorage.setItem(PUSH_ENABLED_KEY, "1");
       showToast("通知をオンにしたよ");
       renderPushStatus();
@@ -1340,19 +1358,24 @@
   function renderPushStatus() {
     var statusEl = document.getElementById("push-status-text");
     var btn = document.getElementById("btn-toggle-push");
+    var secretField = document.getElementById("push-secret-field");
     if (!isPushSupported()) {
       statusEl.textContent = "この端末・ブラウザは通知に対応していないよ";
       btn.disabled = true;
       btn.textContent = "通知を設定する";
+      secretField.hidden = true;
       return;
     }
     btn.disabled = false;
     if (isPushEnabled()) {
       statusEl.textContent = "次の授乳が近づいたら通知でお知らせするよ";
       btn.textContent = "通知をオフにする";
+      secretField.hidden = true;
     } else {
       statusEl.textContent = "次の授乳が近づいたら通知で知らせるよ";
       btn.textContent = "通知をオンにする";
+      // あいことばが未保存(または間違っていて取り消された)ときだけ入力欄を出す
+      secretField.hidden = !!getPushSecret();
     }
   }
   function updatePerFeedPreview() {
