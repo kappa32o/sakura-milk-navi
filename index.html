@@ -266,10 +266,10 @@
       <h2 class="screen-title">記録一覧（今日と過去7日）</h2>
       <div class="cta-stack" style="padding-top:0">
         <button class="btn btn-secondary btn-block" id="btn-open-manual-add">＋ 過去の記録を追加（夜間分など）</button>
-        <button class="btn btn-secondary btn-block" id="btn-open-piyolog">📲 ぴよログから取り込む</button>
+        <button class="btn btn-secondary btn-block" id="btn-open-piyolog">📋 ぴよログでコピーして、ここをタップで取り込み</button>
       </div>
       <div class="card" id="piyolog-form" hidden>
-        <p class="field-note" style="margin-bottom:8px">ぴよログの「メニュー → 記録の出力 → データのエクスポート」で1日分をコピーして、そのまま貼り付けてね。ミルクの行だけ自動で取り込むよ</p>
+        <p class="field-note" style="margin-bottom:8px">ぴよログの「メニュー → 記録の出力 → データのエクスポート」で1日分をコピーしてね。コピーできていれば上のボタンだけで取り込めるよ。うまくいかないときは、ここに貼り付けて「取り込む」を押してね。ミルクの行だけ自動で取り込むよ</p>
         <div class="field"><textarea id="piyolog-text" rows="6" placeholder="【ぴよログ】2026/7/24(金)&#10;08:30   ミルク 80ml　…"></textarea></div>
         <div class="feed-panel-actions">
           <button class="btn btn-ghost" id="piyolog-cancel">やめる</button>
@@ -373,7 +373,7 @@
     "ミルクの量は日によって違って当たり前。ぜんぶ順調のうちだよ",
     "はるたんが休むことも、さくらたんのためになるんだよ",
     "完璧じゃなくていい。笑ってるはるたんがさくらたんはいちばん好き",
-    "困ったら助産師さんに頼っていいんだよ。頼るのも立派な育児",
+    "困ったらミツヒコに頼っていいんだよ。頼るのも立派な育児",
     "さくらたんがすくすく育ってるのは、はるたんのおかげだよ",
     "家事はあとまわしでOK。いまはふたりのお昼寝がいちばん大事",
     "どんな一日でも、さくらたんにとってはるたんは世界一のママだよ"
@@ -1390,14 +1390,10 @@
     });
     return feeds;
   }
-  function importPiyolog() {
-    var text = document.getElementById("piyolog-text").value;
-    if (!text.trim()) { showToast("ぴよログのテキストを貼り付けてね"); return; }
+  // テキストからミルク行を取り込む共通処理。取り込めた件数を返す(-1=ミルク行なし)。
+  function importPiyologText(text) {
     var feeds = parsePiyologText(text, formatDateISO(new Date()));
-    if (feeds.length === 0) {
-      showToast("ミルクの記録が見つからなかったよ。貼り付け内容を確認してね");
-      return;
-    }
+    if (feeds.length === 0) return -1;
     var added = 0;
     feeds.forEach(function (f) {
       var isDuplicate = state.feedLogs.some(function (l) {
@@ -1407,10 +1403,46 @@
       addFeedLog(f.ml, new Date(f.at), false);
       added++;
     });
+    renderRecords();
+    return added;
+  }
+  function importPiyolog() {
+    var text = document.getElementById("piyolog-text").value;
+    if (!text.trim()) { showToast("ぴよログのテキストを貼り付けてね"); return; }
+    var added = importPiyologText(text);
+    if (added === -1) {
+      showToast("ミルクの記録が見つからなかったよ。貼り付け内容を確認してね");
+      return;
+    }
     document.getElementById("piyolog-text").value = "";
     document.getElementById("piyolog-form").hidden = true;
-    renderRecords();
     showToast(added > 0 ? added + "件取り込んだよ" : "ぜんぶ取り込み済みだったよ");
+  }
+  // ワンタップ取り込み: ぴよログでコピー済みのテキストをクリップボードから直接読む。
+  // 読めない/ミルク行がないときは、これまで通り貼り付けフォームを開く。
+  function importPiyologFromClipboard() {
+    var openFormFallback = function (message) {
+      if (message) showToast(message);
+      document.getElementById("piyolog-form").hidden = false;
+    };
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      openFormFallback("");
+      return;
+    }
+    navigator.clipboard.readText().then(function (text) {
+      if (!text || !text.trim()) {
+        openFormFallback("コピーした内容が空だったよ。貼り付けでも取り込めるよ");
+        return;
+      }
+      var added = importPiyologText(text);
+      if (added === -1) {
+        openFormFallback("コピー内容にミルクの記録が見つからなかったよ。貼り付けでも取り込めるよ");
+        return;
+      }
+      showToast(added > 0 ? added + "件取り込んだよ" : "ぜんぶ取り込み済みだったよ");
+    }).catch(function () {
+      openFormFallback("");
+    });
   }
   /* ---------- 根拠画面 ---------- */
   // minMl/maxMlは各時期の1回量レンジ（0〜1ヶ月は助産師監修の日齢別目安、
@@ -1623,9 +1655,7 @@
     document.getElementById("irregular-feed-cancel").addEventListener("click", closeIrregularFeedPanel);
     document.getElementById("irregular-feed-confirm").addEventListener("click", confirmIrregularGive);
     document.getElementById("btn-open-manual-add").addEventListener("click", openManualAddForm);
-    document.getElementById("btn-open-piyolog").addEventListener("click", function () {
-      document.getElementById("piyolog-form").hidden = false;
-    });
+    document.getElementById("btn-open-piyolog").addEventListener("click", importPiyologFromClipboard);
     document.getElementById("piyolog-cancel").addEventListener("click", function () {
       document.getElementById("piyolog-form").hidden = true;
     });
