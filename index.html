@@ -50,6 +50,9 @@
   .next-feed-card { text-align: center; padding-top: 24px; padding-bottom: 26px; }
   .next-feed-time { font-size: 3rem; font-weight: 800; margin: 2px 0 4px; line-height: 1; color: var(--primary-dark); }
   .next-feed-sub { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
+  .next-feed-note { margin: 14px 0 0; padding: 10px 14px; border-radius: 14px; background: var(--surface-2); color: var(--primary-dark); font-size: 0.86rem; line-height: 1.65; }
+  .next-feed-hint { margin: 8px 0 0; color: var(--text-muted); font-size: 0.78rem; line-height: 1.5; }
+  .next-feed-prep { margin: 10px 0 0; padding: 10px 8px; border-radius: 14px; background: var(--primary-soft); color: var(--primary-dark); font-size: 0.75rem; font-weight: 800; line-height: 1.4; text-align: center; }
   .progress-track { background: var(--surface-2); border-radius: 999px; height: 14px; overflow: hidden; margin: 10px 0 8px; }
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--primary)); border-radius: 999px; transition: width 0.4s var(--ease, ease); }
   .progress-label { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
@@ -76,7 +79,7 @@
     margin: 0 16px 14px; padding: 14px 16px; border-radius: var(--radius-md);
     background: var(--primary-soft); display: flex; align-items: center; justify-content: space-between; gap: 10px;
   }
-  .banner p { margin: 0; font-size: 0.86rem; font-weight: 600; }
+  .banner p { flex: 1; margin: 0; font-size: 0.86rem; font-weight: 600; }
   .banner button { flex-shrink: 0; }
   .encouragement-card { background: var(--surface-2); text-align: center; }
   .encouragement-card p { margin: 0; font-size: 0.98rem; font-weight: 600; line-height: 1.5; }
@@ -103,6 +106,7 @@
   .feed-panel-label { margin: 0 0 10px; color: var(--text-muted); font-size: 0.86rem; font-weight: 700; }
   .stepper { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
   .stepper-btn { width: 46px; height: 46px; border-radius: 50%; border: none; background: var(--surface-2); color: var(--primary-dark); font-size: 1.1rem; font-weight: 800; cursor: pointer; }
+  .stepper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .stepper-value { font-size: 1.9rem; font-weight: 800; min-width: 96px; }
   .feed-panel-actions { display: flex; gap: 10px; }
   .feed-panel-actions .btn { flex: 1; }
@@ -113,6 +117,7 @@
   .irregular-answer { text-align: center; }
   .irregular-answer .headline { font-size: 2.1rem; font-weight: 800; color: var(--primary-dark); margin: 6px 0; }
   .irregular-answer .subline { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
+  .irregular-answer .subline-prep { margin: 4px 0 0; color: var(--primary-dark); font-size: 0.76rem; font-weight: 700; }
   .irregular-answer .wait-text { font-size: 1.02rem; font-weight: 700; line-height: 1.6; margin: 4px 0; }
   .checklist summary { font-weight: 700; cursor: pointer; padding: 2px 0; }
   .checklist ul { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -145,7 +150,7 @@
   .card p.body-text { line-height: 1.7; font-size: 0.9rem; margin: 0 0 8px; }
   .record-date-group { margin: 0 16px 18px; }
   .record-date-heading { font-size: 0.84rem; font-weight: 800; color: var(--text-muted); margin: 0 4px 8px; }
-  .record-item { background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .record-item { background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
   .record-item .rec-main { display: flex; flex-direction: column; }
   .record-item .rec-time { font-weight: 800; font-size: 1rem; }
   .record-item .rec-ml { color: var(--text-muted); font-size: 0.82rem; }
@@ -154,7 +159,7 @@
   .rec-actions button { border: none; border-radius: var(--radius-sm); padding: 8px 10px; font-size: 0.76rem; font-weight: 700; cursor: pointer; background: var(--surface-2); color: var(--text); }
   .rec-actions .rec-delete { background: var(--danger-soft); color: var(--danger); }
   .empty-state { margin: 8px 16px 20px; padding: 26px 20px; text-align: center; color: var(--text-muted); background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); font-size: 0.9rem; line-height: 1.6; }
-  .edit-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--surface-2); }
+  .edit-form { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--surface-2); }
   .edit-form .row { display: flex; gap: 8px; }
   .edit-form input { flex: 1; padding: 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--surface-2); background: var(--surface-2); color: var(--text); font-family: inherit; }
   .tab-nav {
@@ -191,6 +196,9 @@
         <p class="eyebrow">次の授乳</p>
         <p class="next-feed-time" id="next-feed-time">--:--</p>
         <p class="next-feed-sub" id="next-feed-sub">記録がまだありません</p>
+        <p class="next-feed-prep" id="next-feed-prep" hidden></p>
+        <p class="next-feed-note" id="next-feed-note" hidden></p>
+        <p class="next-feed-hint" id="next-feed-hint" hidden></p>
       </div>
       <div class="card">
         <p class="eyebrow">今日の合計</p>
@@ -198,12 +206,29 @@
         <p class="progress-label" id="progress-label">0ml / 目安0ml</p>
         <p class="progress-warn" id="progress-warn" hidden></p>
       </div>
+      <div class="card" id="today-status-card" hidden>
+        <p class="eyebrow">きょうのようす</p>
+        <p class="body-text" id="today-status-pee" hidden></p>
+        <p class="body-text" id="today-status-poop" hidden></p>
+      </div>
       <div class="card feed-panel" id="feed-panel" hidden>
+        <p class="feed-panel-label">飲みはじめた時間</p>
+        <div class="stepper">
+          <button class="stepper-btn" id="feed-time-minus" aria-label="5分戻す" style="font-size:0.72rem">−5分</button>
+          <span class="stepper-value" id="feed-time-value">00:00</span>
+          <button class="stepper-btn" id="feed-time-plus" aria-label="5分進める" style="font-size:0.72rem">+5分</button>
+        </div>
+        <p class="field-note" style="margin:0 0 16px">飲みはじめでOK。ずれてても大丈夫だよ</p>
         <p class="feed-panel-label">飲んだ量を確認してね</p>
         <div class="stepper">
           <button class="stepper-btn" id="feed-minus" aria-label="5ml減らす">−5</button>
           <span class="stepper-value" id="feed-value">0ml</span>
           <button class="stepper-btn" id="feed-plus" aria-label="5ml増やす">+5</button>
+        </div>
+        <p class="field-note" style="margin:0 0 8px">ついでに教えてね（なくても大丈夫）</p>
+        <div class="feed-panel-actions" style="margin-bottom:12px">
+          <button type="button" class="btn btn-ghost" id="feed-pee-toggle" aria-pressed="false">💧 おしっこ</button>
+          <button type="button" class="btn btn-ghost" id="feed-poop-toggle" aria-pressed="false">💩 うんち</button>
         </div>
         <div class="feed-panel-actions">
           <button class="btn btn-ghost" id="feed-cancel">やめる</button>
@@ -235,11 +260,23 @@
       </div>
       <div class="card irregular-answer" id="irregular-answer"></div>
       <div class="card feed-panel" id="irregular-feed-panel" hidden>
+        <p class="feed-panel-label">飲みはじめた時間</p>
+        <div class="stepper">
+          <button class="stepper-btn" id="irregular-feed-time-minus" aria-label="5分戻す" style="font-size:0.72rem">−5分</button>
+          <span class="stepper-value" id="irregular-feed-time-value">00:00</span>
+          <button class="stepper-btn" id="irregular-feed-time-plus" aria-label="5分進める" style="font-size:0.72rem">+5分</button>
+        </div>
+        <p class="field-note" style="margin:0 0 16px">飲みはじめでOK。ずれてても大丈夫だよ</p>
         <p class="feed-panel-label">飲んだ量を確認してね</p>
         <div class="stepper">
           <button class="stepper-btn" id="irregular-feed-minus" aria-label="5ml減らす">−5</button>
           <span class="stepper-value" id="irregular-feed-value">0ml</span>
           <button class="stepper-btn" id="irregular-feed-plus" aria-label="5ml増やす">+5</button>
+        </div>
+        <p class="field-note" style="margin:0 0 8px">ついでに教えてね（なくても大丈夫）</p>
+        <div class="feed-panel-actions" style="margin-bottom:12px">
+          <button type="button" class="btn btn-ghost" id="irregular-feed-pee-toggle" aria-pressed="false">💧 おしっこ</button>
+          <button type="button" class="btn btn-ghost" id="irregular-feed-poop-toggle" aria-pressed="false">💩 うんち</button>
         </div>
         <div class="feed-panel-actions">
           <button class="btn btn-ghost" id="irregular-feed-cancel">やめる</button>
@@ -278,8 +315,13 @@
       </div>
       <div class="card" id="manual-add-form" hidden>
         <div class="field"><label for="manual-date">日付</label><input type="date" id="manual-date"></div>
-        <div class="field"><label for="manual-time">時刻</label><input type="time" id="manual-time"></div>
+        <div class="field"><label for="manual-time">飲みはじめた時間</label><input type="time" id="manual-time"></div>
         <div class="field"><label for="manual-ml">量 (ml)</label><input type="number" id="manual-ml" step="10" min="0"></div>
+        <p class="field-note" style="margin:0 0 8px">ついでに教えてね（なくても大丈夫）</p>
+        <div class="feed-panel-actions" style="margin-bottom:12px">
+          <button type="button" class="btn btn-ghost" id="manual-pee-toggle" aria-pressed="false">💧 おしっこ</button>
+          <button type="button" class="btn btn-ghost" id="manual-poop-toggle" aria-pressed="false">💩 うんち</button>
+        </div>
         <div class="feed-panel-actions">
           <button class="btn btn-ghost" id="manual-cancel">やめる</button>
           <button class="btn btn-primary" id="manual-save">追加する</button>
@@ -316,6 +358,11 @@
       <div class="card">
         <h3>国のガイドも「赤ちゃんそれぞれでいい」って言ってるよ</h3>
         <p class="body-text">厚生労働省の「授乳・離乳の支援ガイド」でも、飲む量や間隔は赤ちゃんごとに違って当たり前とされているよ。数字はあくまで目安。さくらたんのご機嫌がよくて、体重が少しずつ増えていれば、それがいちばんの証拠だよ。</p>
+      </div>
+      <div class="card" id="growth-card" hidden>
+        <h3>さくらたんの成長</h3>
+        <p class="body-text" id="growth-feed-line" hidden></p>
+        <p class="body-text" id="growth-weight-line" hidden></p>
       </div>
     </section>
     <section id="screen-settings" class="screen" hidden>
@@ -356,6 +403,24 @@
   var MIN_MILK_INTERVAL_MINUTES = 60;
   // 前借りの下限は1回量の半分。さくらたんはよく飲むので固定40mlより多めに設定。
   var ADVANCE_FLOOR_RATIO = 0.5;
+  // 実測周期の学習パラメータ。月齢テーブルの回数はあくまで一般的な目安で、
+  // 赤ちゃんごとの実際のペースとはずれる（さくらたんは標準3.5時間に対し実測2〜3時間）。
+  // ずれたまま「次のミルク」を出すと毎回外れるので、記録がたまったら実測を優先する。
+  var OBSERVED_CYCLE_WINDOW_DAYS = 3;
+  var OBSERVED_CYCLE_MIN_SAMPLES = 5;
+  // 60分未満は追いミルク・イレギュラー、6時間超は記録漏れか夜のまとめ寝。
+  // どちらも「ふだんの周期」ではないので学習から外す。
+  var OBSERVED_GAP_MIN_MINUTES = 60;
+  var OBSERVED_GAP_MAX_MINUTES = 360;
+  // 学習結果の安全弁。極端な値でスケジュール全体が暴れるのを防ぐ。
+  var OBSERVED_CYCLE_FLOOR_MINUTES = 120;
+  var OBSERVED_CYCLE_CAP_MINUTES = 300;
+  var OBSERVED_CYCLE_ROUND_MINUTES = 10;
+  // 回数が増えて1回量を割り直すときの下限。これ以下は1回として案内しない。
+  var MIN_PER_FEED_ML = 20;
+  // 次の授乳がこの分数以内に迫ったら「起こさなくていい・先に用意しておこう」の一言を出す。
+  // 時刻表示や通知を見て、寝ているさくらたんを起こしにいってしまわないように。
+  var NEXT_FEED_PREP_MINUTES = 20;
   var RECORD_HISTORY_DAYS = 7;
   var TIMECHART_HOUR_PX = 48;
   var TIMECHART_LEFT_PAD = 36;
@@ -386,6 +451,37 @@
   ];
   var NIGHT_MESSAGE_START_HOUR = 22;
   var NIGHT_MESSAGE_END_HOUR = 6;
+  // 時間帯別の周期学習(機能1)。実データでは周期が時間帯で大きく異なる（夕方が最も短い）ため、
+  // 全時間帯一律ではなく3区分に分けて中央値を学習する。区分の境界は実測の谷/山に合わせている。
+  var TIME_BUCKET_DAYTIME = "daytime";
+  var TIME_BUCKET_EVENING = "evening";
+  var TIME_BUCKET_NIGHT = "night";
+  var TIME_BUCKETS = [TIME_BUCKET_DAYTIME, TIME_BUCKET_EVENING, TIME_BUCKET_NIGHT];
+  // 各区分がカバーする時間数。1日の回数を積算するときの分母に使う(合計24時間)。
+  var TIME_BUCKET_HOURS = {
+    daytime: 9, // 6:00-14:59
+    evening: 6, // 15:00-20:59
+    night: 9    // 21:00-5:59
+  };
+  // 区分ごとのサンプルが足りないときのフォールバック階層で使う下限(全体の実測周期と共通)。
+  var OBSERVED_CYCLE_BUCKET_MIN_SAMPLES = OBSERVED_CYCLE_MIN_SAMPLES;
+  // 機能2: ぐずりやすい時間帯の予告。夕方区分の周期が全体の実測周期よりはっきり短い(75%以下)ときだけ、
+  // 14時台の1時間だけ先に一声かけておく（当ててびっくりさせない範囲の予告にとどめる）。
+  var FUSSY_WINDOW_START_HOUR = 14;
+  var FUSSY_WINDOW_END_HOUR = 15;
+  var FUSSY_EVENING_RATIO_THRESHOLD = 0.75;
+  // 機能3: おしっこの回数の目安。6回以上で「足りてるサイン」、それ未満は15時以降だけ声かけする
+  // (午前中はまだ判断できる時間ではないため)。
+  var PEE_SUFFICIENT_COUNT = 6;
+  var PEE_LOW_COUNT_HOUR = 15;
+  // 機能5: 成長のあしあと。1回量の中央値を比較する「2週間前」の日数。
+  var GROWTH_COMPARE_DAYS_AGO = 14;
+  // 配信データ(history.json)とlocalStorageの重複判定に使う許容誤差(分)。
+  var HISTORY_DEDUPE_MINUTES = 5;
+  var HISTORY_URL = "./data/history.json";
+  // 機能8: 記録パネルの「飲みはじめた時間」調整。未来には進めず、3時間より前には遡れない。
+  var TIME_ADJUST_STEP_MINUTES = 5;
+  var TIME_ADJUST_MAX_PAST_MINUTES = 180;
   var DEFAULT_SETTINGS = {
     birthDate: "2026-07-09",
     weightGrams: null,
@@ -407,6 +503,102 @@
     if (!feedsPerDay) return 0;
     return Math.round((1440 / feedsPerDay) / 30) * 30;
   }
+  function median(numbers) {
+    if (numbers.length === 0) return null;
+    var sorted = numbers.slice().sort(function (a, b) { return a - b; });
+    var mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  // 記録から「さくらたんの実際の周期」を読みとる。直近ウィンドウ内の隣り合う授乳の
+  // 間隔を集め、外れ値（追いミルク・記録漏れ）を落として中央値をとる。
+  // 平均ではなく中央値なのは、夜のまとめ寝1回で全体が引っぱられないようにするため。
+  // サンプルが足りないうちはnullを返し、呼び出し側が月齢の標準値にフォールバックする。
+  function calcObservedCycleMinutes(feedLogs, now) {
+    if (!feedLogs || feedLogs.length === 0) return null;
+    var nowMs = now.getTime();
+    var cutoff = nowMs - OBSERVED_CYCLE_WINDOW_DAYS * 86400000;
+    var times = feedLogs
+      .map(function (l) { return new Date(l.at).getTime(); })
+      .filter(function (t) { return !isNaN(t) && t >= cutoff && t <= nowMs; })
+      .sort(function (a, b) { return a - b; });
+    var gaps = [];
+    for (var i = 1; i < times.length; i++) {
+      var gap = (times[i] - times[i - 1]) / 60000;
+      if (gap >= OBSERVED_GAP_MIN_MINUTES && gap <= OBSERVED_GAP_MAX_MINUTES) gaps.push(gap);
+    }
+    if (gaps.length < OBSERVED_CYCLE_MIN_SAMPLES) return null;
+    var rounded = Math.round(median(gaps) / OBSERVED_CYCLE_ROUND_MINUTES) * OBSERVED_CYCLE_ROUND_MINUTES;
+    return clamp(rounded, OBSERVED_CYCLE_FLOOR_MINUTES, OBSERVED_CYCLE_CAP_MINUTES);
+  }
+  // 時刻(時)がどの時間帯区分に属するかを返す。区分の境界は実測の谷/山に合わせて固定。
+  function getTimeBucketForHour(hour) {
+    if (hour >= 6 && hour <= 14) return TIME_BUCKET_DAYTIME;
+    if (hour >= 15 && hour <= 20) return TIME_BUCKET_EVENING;
+    return TIME_BUCKET_NIGHT;
+  }
+  // calcObservedCycleMinutesの時間帯別バージョン(機能1)。直近3日の授乳間隔を、
+  // 「前回授乳」側の時刻が属する区分ごとに分けて中央値を学習する。区分を前回側で決めるのは、
+  // 「次の授乳」が前回授乳の時刻が属する区分の周期に従う、という呼び出し側の使い方に合わせるため。
+  // フィルタ(60分未満・6時間超を除外)・クランプ(120〜300分)・丸め(10分)は全体版と同じルール。
+  function calcObservedCycleMinutesByBucket(feedLogs, now) {
+    var result = {};
+    TIME_BUCKETS.forEach(function (b) { result[b] = null; });
+    if (!feedLogs || feedLogs.length === 0) return result;
+    var nowMs = now.getTime();
+    var cutoff = nowMs - OBSERVED_CYCLE_WINDOW_DAYS * 86400000;
+    var times = feedLogs
+      .map(function (l) { return new Date(l.at).getTime(); })
+      .filter(function (t) { return !isNaN(t) && t >= cutoff && t <= nowMs; })
+      .sort(function (a, b) { return a - b; });
+    var gapsByBucket = {};
+    TIME_BUCKETS.forEach(function (b) { gapsByBucket[b] = []; });
+    for (var i = 1; i < times.length; i++) {
+      var gap = (times[i] - times[i - 1]) / 60000;
+      if (gap < OBSERVED_GAP_MIN_MINUTES || gap > OBSERVED_GAP_MAX_MINUTES) continue;
+      var bucket = getTimeBucketForHour(new Date(times[i - 1]).getHours());
+      gapsByBucket[bucket].push(gap);
+    }
+    TIME_BUCKETS.forEach(function (b) {
+      if (gapsByBucket[b].length < OBSERVED_CYCLE_BUCKET_MIN_SAMPLES) return;
+      var rounded = Math.round(median(gapsByBucket[b]) / OBSERVED_CYCLE_ROUND_MINUTES) * OBSERVED_CYCLE_ROUND_MINUTES;
+      result[b] = clamp(rounded, OBSERVED_CYCLE_FLOOR_MINUTES, OBSERVED_CYCLE_CAP_MINUTES);
+    });
+    return result;
+  }
+  // ある時刻がどの周期を使うべきかを、区分別の学習結果(bucketCycles)から解決する。
+  // その区分が未学習(null/undefined)ならフォールバック(全体の実測周期→標準周期)を使う。
+  function resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, hour) {
+    var bucket = getTimeBucketForHour(hour);
+    var minutes = bucketCycles ? bucketCycles[bucket] : null;
+    return minutes || fallbackCycleMinutes;
+  }
+  function calcFeedsPerDayForCycle(cycleMinutes) {
+    if (cycleMinutes <= 0) return 0;
+    return Math.max(1, Math.round(1440 / cycleMinutes));
+  }
+  // 1日の回数(機能1) = 3区分それぞれの周期から、その区分の時間数ぶんの回数を積算して合計する。
+  // 例: 日中9時間÷2h30 + 夕方6時間÷1h35 + 夜間9時間÷2h45。一律の周期で1440分を割るよりも、
+  // 実際のペース配分に近い回数になる。
+  function calcFeedsPerDayFromBuckets(bucketCycles, fallbackCycleMinutes) {
+    var total = 0;
+    TIME_BUCKETS.forEach(function (b) {
+      var cycle = (bucketCycles && bucketCycles[b]) || fallbackCycleMinutes;
+      if (cycle > 0) total += (TIME_BUCKET_HOURS[b] * 60) / cycle;
+    });
+    return Math.max(1, Math.round(total));
+  }
+  // 回数が標準より増えたぶん、1日の合計目安もレンジ上限まで追随させる。
+  // 早く起きる＝足りていない可能性に応えつつ、上限は超えないので安全側は保たれる。
+  function calcDailyTotalForFeeds(range, standardPerFeedMl, feedsPerDay) {
+    return clamp(standardPerFeedMl * feedsPerDay, range.mid, range.max);
+  }
+  // 実際の回数で1日の合計を割り直した1回量。
+  // 「1回はこの時期のレンジ内」は標準回数を前提にしたルールなので、
+  // 回数がそれより多い日は下限を割ってよい（上限side は飲ませすぎ防止のため残す）。
+  function calcPerFeedForFeeds(dailyTotalMl, standardPerFeedMl, feedsPerDay, standardFeedsPerDay, maxMl) {
+    if (feedsPerDay <= standardFeedsPerDay) return standardPerFeedMl;
+    return clamp(roundToUnit(dailyTotalMl / feedsPerDay), MIN_PER_FEED_ML, maxMl);
+  }
   // 1日の合計目安をレンジ {min, mid, max} で返す。
   // ・通常: 体重×150〜200ml/kg。その時期の1回量上限×回数と1100mlでさらにキャップ。
   // ・生後1週間(dayRule): 「日齢×10ml/回」ルールから組み立てる
@@ -418,8 +610,12 @@
       var max = (perFeedByDay + 10) * row.defFeeds;
       return { min: min, mid: (min + max) / 2, max: max };
     }
+    // 上限は「体重×200ml/kg」と「その時期の1回上限×回数」の広いほうを採る。
+    // 体重ベースだけで縛ると、よく飲む子で毎日「上限超え」の警告が出てしまう
+    // （さくらたんは実測で1日約250ml/kg飲むが、体重増加は27g/日で標準ペース）。
+    // 缶や母子手帳の月齢別目安も同じくらい根拠があるので、どちらか広いほうを上限にする。
     var bandCapMl = row.maxMl * row.defFeeds;
-    var maxMl = Math.min((weightGrams / 1000) * DAILY_COEF_MAX, bandCapMl, DAILY_CAP_ML);
+    var maxMl = Math.min(Math.max((weightGrams / 1000) * DAILY_COEF_MAX, bandCapMl), DAILY_CAP_ML);
     var minMl = Math.min((weightGrams / 1000) * DAILY_COEF_MIN, maxMl);
     return { min: minMl, mid: (minMl + maxMl) / 2, max: maxMl };
   }
@@ -466,20 +662,79 @@
     if (perFeedMl <= 0) return cycleMinutes;
     return Math.round(cycleMinutes * (givenMl / perFeedMl));
   }
-  // v4: 1日予算制のスケジューラ本体。純関数として全画面（ホーム/イレギュラー/タイムチャート）で共通使用する。
+  // v5: 1日予算制のスケジューラ本体。純関数として全画面（ホーム/イレギュラー/タイムチャート）で共通使用する。
   // R（残り予算）が20ml未満なら「きょうの目安ぶんは完了」として扱う。
   // 次回量は「1日の残り予算Rの中で満額を出せるだけ出す」方式: 前借り後でも1日に余裕があれば満額に戻り、
   // 足りなくなったときだけ自然に減る（前借り分を機械的に差し引く減額はしない）。
-  function calcNextFeed(lastLog, perFeedMl, cycleMinutes, remainingMl, now) {
+  // 周期は固定値ではなくbucketCycles(機能1: 時間帯別の周期)から、前回授乳の時刻が属する区分で解決する。
+  // その区分が未学習ならfallbackCycleMinutes(全体の実測周期→標準周期)を使う。
+  function calcNextFeed(lastLog, perFeedMl, bucketCycles, fallbackCycleMinutes, remainingMl, now) {
     if (remainingMl < 20) return { done: true };
     if (!lastLog) {
       return { time: now, ml: roundToUnit(Math.min(perFeedMl, remainingMl)) };
     }
+    var cycleMinutes = resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, new Date(lastLog.at).getHours());
     // 下限0.5 = 少量しか飲まなくても最低半周期はあける（ミルクの胃排出半減期約78分に整合）
     var ratio = clamp(lastLog.ml / perFeedMl, 0.5, 1);
     var time = new Date(new Date(lastLog.at).getTime() + cycleMinutes * ratio * 60000);
     var ml = roundToUnit(Math.min(perFeedMl, remainingMl));
     return { time: time, ml: ml };
+  }
+  // 機能7: 「つくる量」と「飲む目安量」を分ける。粉ミルクのスプーンは20ml用・50ml用・100ml用の3種類。
+  // 目安量ちょうどに作るより、スプーンの手数が少ないほうが夜中はずっと楽なので、
+  // 「目安量以上で、いちばん杯数が少なくなる量」を調乳量として提案する。
+  // 大小のスプーンをまたいで同時に使うと逆に手間が増えるため、100ml用と20ml用を
+  // 同時に使う組み合わせは除外し、隣り合うサイズ同士(100+50 / 50+20)か単一サイズのみを許可する。
+  var SCOOP_UNITS_ML = [100, 50, 20];
+  var SCOOP_SEARCH_MAX_COUNT = 20;
+  // 調乳プランを {totalMl, scoops:[{unitMl, count}]} で返す(scoopsは大きい単位から順)。
+  // 選定ルール(杯数最小、同数なら少ない量)はcalcPrepMlのときと同じ。
+  function calcPrepPlan(targetMl) {
+    if (targetMl <= 0) return { totalMl: 0, scoops: [] };
+    for (var k = 1; k <= SCOOP_SEARCH_MAX_COUNT; k++) {
+      var best = null;
+      for (var a = 0; a <= k; a++) {
+        for (var c = 0; c <= k - a; c++) {
+          if (a > 0 && c > 0) continue; // 100ml用と20ml用の同時使用は除外
+          var b = k - a - c;
+          var sum = a * 100 + b * 50 + c * 20;
+          if (sum >= targetMl && (best === null || sum < best.sum)) best = { sum: sum, a: a, b: b, c: c };
+        }
+      }
+      if (best !== null) {
+        var scoops = [];
+        if (best.a > 0) scoops.push({ unitMl: 100, count: best.a });
+        if (best.b > 0) scoops.push({ unitMl: 50, count: best.b });
+        if (best.c > 0) scoops.push({ unitMl: 20, count: best.c });
+        return { totalMl: best.sum, scoops: scoops };
+      }
+    }
+    var fallbackMl = roundToUnit(targetMl, 50); // 保険(理論上ここには来ない)
+    return { totalMl: fallbackMl, scoops: [{ unitMl: 50, count: Math.max(1, Math.round(fallbackMl / 50)) }] };
+  }
+  // 調乳プランを「◯mlスプーンでN杯」の文言にする。はるたんは数字よりスプーンの杯数のほうが
+  // 直接の作業に結びつくため、mlの合計だけでなく内訳を伝える。
+  // options.withVerb=false のときは語尾(つくってね/だよ)を付けない
+  // (イレギュラー画面で「。残してもだいじょうぶだよ」に続けて使うため)。
+  function formatPrepPlan(plan, options) {
+    if (!plan || !plan.scoops || plan.scoops.length === 0) return "";
+    var withVerb = !options || options.withVerb !== false;
+    if (plan.scoops.length === 1) {
+      var only = plan.scoops[0];
+      return withVerb
+        ? only.unitMl + "mlスプーンで" + only.count + "杯つくってね"
+        : only.unitMl + "mlスプーンで" + only.count + "杯";
+    }
+    var joined = plan.scoops.map(function (s) { return s.unitMl + "mlスプーン" + s.count + "杯"; }).join("と");
+    return withVerb ? joined + "だよ" : joined;
+  }
+  // 機能8: 「飲みはじめた時間」調整の上下限クランプ。未来(referenceNowより後)には進めず、
+  // referenceNowからTIME_ADJUST_MAX_PAST_MINUTESより前には遡れない。
+  function clampFeedTimeAdjust(at, referenceNow) {
+    var minAt = new Date(referenceNow.getTime() - TIME_ADJUST_MAX_PAST_MINUTES * 60000);
+    if (at.getTime() > referenceNow.getTime()) return referenceNow;
+    if (at.getTime() < minAt.getTime()) return minAt;
+    return at;
   }
   function calcAgeMonths(birthDateStr, todayDate) {
     if (!birthDateStr) return null;
@@ -498,6 +753,72 @@
     var today = todayDate || new Date();
     var todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     return Math.max(0, Math.round((todayMidnight - birth) / 86400000));
+  }
+  // 機能3(おしっこ): 診断はせず、相談を促すトーンのみ。0件の日はまだ判断できないので何も出さない。
+  function calcPeeMessage(countToday, hour) {
+    if (countToday === 0) return null;
+    if (countToday >= PEE_SUFFICIENT_COUNT) return "おしっこ" + countToday + "回。ちゃんと足りてるサインだよ";
+    if (hour >= PEE_LOW_COUNT_HOUR) return "今日はおしっこが少なめかも。みつひこに相談してね";
+    return null;
+  }
+  // 機能6(うんち): 最後の記録からの経過日数で出し分け。診断はしない。
+  function calcPoopMessage(daysSinceLast) {
+    if (daysSinceLast === null || daysSinceLast <= 1) return null;
+    if (daysSinceLast === 2) return "うんちは2日出ていないよ。数日あくこともあるよ";
+    return "うんちが" + daysSinceLast + "日出ていないよ。みつひこに相談してみてね";
+  }
+  // 最後のうんち記録からの経過日数(暦日ベース)。記録が無ければnull。
+  function calcDaysSincePoop(poopTimes, now) {
+    if (!poopTimes || poopTimes.length === 0) return null;
+    var lastMs = poopTimes.reduce(function (max, t) {
+      var ms = new Date(t).getTime();
+      return isNaN(ms) ? max : Math.max(max, ms);
+    }, -Infinity);
+    if (lastMs === -Infinity) return null;
+    var todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    var lastDate = new Date(lastMs);
+    var lastMidnight = new Date(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()).getTime();
+    return Math.round((todayMidnight - lastMidnight) / 86400000);
+  }
+  // 機能5(成長のあしあと): 指定日のミルク量の中央値。記録がなければnull。
+  function calcMedianMlForDate(feedLogs, dateStr) {
+    var mls = feedLogs.filter(function (l) { return l.at.slice(0, 10) === dateStr; }).map(function (l) { return l.ml; });
+    return median(mls);
+  }
+  /* ---------- 配信データ(history.json)とlocalStorageのマージ(純関数) ---------- */
+  // 配信データ=過去の履歴、localStorage=端末で記録した分。同種イベントで時刻差が
+  // HISTORY_DEDUPE_MINUTES以内かつ内容が一致すれば同一とみなし、localStorage側を優先する
+  // (呼び出し側はこのマージ結果をstateに書き戻さないこと。再配信のたびに重複が増えるため)。
+  function mergeFeedLogs(localLogs, remoteFeeds) {
+    if (!remoteFeeds || remoteFeeds.length === 0) return localLogs;
+    var extra = remoteFeeds.filter(function (r) {
+      var rTime = new Date(r.at).getTime();
+      return !localLogs.some(function (l) {
+        return l.ml === r.ml && Math.abs(new Date(l.at).getTime() - rTime) <= HISTORY_DEDUPE_MINUTES * 60000;
+      });
+    }).map(function (r, i) {
+      return { id: "h" + i + "-" + r.at, at: r.at, ml: r.ml, irregular: false };
+    });
+    return localLogs.concat(extra);
+  }
+  // おしっこ・うんちのような「時刻だけ」のイベント配列のマージ。時刻差のみで重複判定する。
+  function mergeTimeEvents(localTimes, remoteTimes) {
+    if (!remoteTimes || remoteTimes.length === 0) return localTimes;
+    var extra = remoteTimes.filter(function (r) {
+      var rTime = new Date(r).getTime();
+      return !localTimes.some(function (l) {
+        return Math.abs(new Date(l).getTime() - rTime) <= HISTORY_DEDUPE_MINUTES * 60000;
+      });
+    });
+    return localTimes.concat(extra);
+  }
+  // 体重は日付単位。同じ日付がlocalStorage側に既にあれば、その日は配信データを採用しない。
+  function mergeWeightHistory(localWeights, remoteWeights) {
+    if (!remoteWeights || remoteWeights.length === 0) return localWeights;
+    var localDates = {};
+    localWeights.forEach(function (w) { localDates[w.date] = true; });
+    var extra = remoteWeights.filter(function (r) { return !localDates[r.date]; });
+    return localWeights.concat(extra);
   }
   /* ---------- 日付/時刻ユーティリティ ---------- */
   function pad2(n) { return String(n).padStart(2, "0"); }
@@ -525,7 +846,9 @@
     return {
       settings: Object.assign({}, DEFAULT_SETTINGS, { papaMessages: DEFAULT_PAPA_MESSAGES.slice() }),
       weightHistory: [],
-      feedLogs: []
+      feedLogs: [],
+      pees: [],
+      poops: []
     };
   }
   function loadState() {
@@ -550,7 +873,10 @@
       return {
         settings: settings,
         weightHistory: Array.isArray(parsed.weightHistory) ? parsed.weightHistory : [],
-        feedLogs: Array.isArray(parsed.feedLogs) ? parsed.feedLogs : []
+        feedLogs: Array.isArray(parsed.feedLogs) ? parsed.feedLogs : [],
+        // 既存端末にはまだ無いフィールドなので、無ければ空配列にフォールバックする
+        pees: Array.isArray(parsed.pees) ? parsed.pees : [],
+        poops: Array.isArray(parsed.poops) ? parsed.poops : []
       };
     } catch (err) {
       console.error("[sakura-milk-navi] 状態の読み込みに失敗しました。初期状態を使用します。", err);
@@ -618,18 +944,46 @@
     if (estimated !== null) return estimated;
     return row ? row.stdMid : null;
   }
-  // 回数は常に月齢から決める（体重の入力有無には左右されない）
-  function getFeedsPerDay() {
+  // 周期と回数の決定: 記録がたまっていれば実測、足りなければ月齢の標準値。
+  // 標準値も併せて返すのは、根拠画面での説明と、夜間の記録漏れ判定に使うため。
+  // 機能1: 全体の実測周期に加えて、時間帯別(bucketCycles)も学習する。区分ごとのフォールバックは
+  // 「その区分の実測→全体の実測周期→月齢標準周期」の3段階。feedsPerDayは区分別周期の積算で決める。
+  function getCycleInfo() {
     var row = getAgeRow();
-    return row ? row.defFeeds : 0;
+    var standardFeeds = row ? row.defFeeds : 0;
+    var standardCycle = calcCycleMinutesForFeeds(standardFeeds);
+    var mergedLogs = getMergedFeedLogs();
+    var observed = standardFeeds ? calcObservedCycleMinutes(mergedLogs, new Date()) : null;
+    var overallCycle = observed === null ? standardCycle : observed;
+    var bucketObserved = standardFeeds ? calcObservedCycleMinutesByBucket(mergedLogs, new Date()) : {};
+    var bucketCycles = {};
+    TIME_BUCKETS.forEach(function (b) {
+      bucketCycles[b] = (bucketObserved && bucketObserved[b]) || overallCycle;
+    });
+    return {
+      cycleMinutes: overallCycle,
+      feedsPerDay: standardFeeds ? calcFeedsPerDayFromBuckets(bucketCycles, overallCycle) : 0,
+      isObserved: observed !== null,
+      standardCycleMinutes: standardCycle,
+      standardFeedsPerDay: standardFeeds,
+      bucketCycles: bucketCycles
+    };
   }
-  function getCycleMinutes() {
-    return calcCycleMinutesForFeeds(getFeedsPerDay());
+  function getFeedsPerDay() {
+    return getCycleInfo().feedsPerDay;
+  }
+  // 月齢の標準回数を前提にした1回量。実測回数で割り直す前の基準値。
+  function getStandardPerFeedMl() {
+    var row = getAgeRow();
+    if (!row) return 0;
+    return calcPerFeedMlFromRow(getWeightForCalc(), row, getAgeDays());
   }
   function getPerFeedMl() {
     var row = getAgeRow();
     if (!row) return 0;
-    return calcPerFeedMlFromRow(getWeightForCalc(), row, getAgeDays());
+    var info = getCycleInfo();
+    return calcPerFeedForFeeds(
+      getDailyTotalMl(), getStandardPerFeedMl(), info.feedsPerDay, info.standardFeedsPerDay, row.maxMl);
   }
   // 1日の合計目安レンジ {min, mid, max}
   function getDailyTargetRange() {
@@ -637,12 +991,16 @@
     if (!row) return { min: 0, mid: 0, max: 0 };
     return calcDailyTargetRange(getWeightForCalc(), row, getAgeDays());
   }
-  // スケジュール予算・進捗バーの分母にはレンジ中央値を使う
+  // スケジュール予算・進捗バーの分母。基準はレンジ中央値だが、
+  // 実測の回数が標準より多い日はレンジ上限まで追随する。
   function getDailyTotalMl() {
-    return getDailyTargetRange().mid;
+    var row = getAgeRow();
+    if (!row) return 0;
+    return calcDailyTotalForFeeds(getDailyTargetRange(), getStandardPerFeedMl(), getFeedsPerDay());
   }
+  // 学習・集計(周期学習/今日の合計/タイムチャート)はマージ済みデータを使う。
   function getSortedLogs() {
-    return state.feedLogs.slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+    return getMergedFeedLogs().slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
   }
   function getLastFeedLog() {
     var sorted = getSortedLogs();
@@ -650,14 +1008,16 @@
   }
   function getTodayTotalMl() {
     var todayStr = formatDateISO(new Date());
-    return state.feedLogs
+    return getMergedFeedLogs()
       .filter(function (l) { return l.at.slice(0, 10) === todayStr; })
       .reduce(function (sum, l) { return sum + l.ml; }, 0);
   }
+  // 記録一覧(編集/削除)は端末のlocalStorage分だけを対象にする。配信データは読み取り専用の
+  // 実測値で、削除・修正ボタンが機能しない項目を一覧に混ぜたくないため、ここではマージしない。
   function getRecentLogsByDate() {
     var cutoff = formatDateISO(new Date(Date.now() - (RECORD_HISTORY_DAYS - 1) * 86400000));
     var groups = {};
-    getSortedLogs().forEach(function (log) {
+    state.feedLogs.slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); }).forEach(function (log) {
       var d = log.at.slice(0, 10);
       if (d < cutoff) return;
       if (!groups[d]) groups[d] = [];
@@ -679,6 +1039,80 @@
       feedLogs: state.feedLogs.map(function (l) { return l.id === id ? Object.assign({}, l, changes) : l; })
     });
     saveState();
+  }
+  // おしっこ/うんちの記録を追加する。既存の重複排除ロジック(5分以内は同一とみなす)を維持する。
+  // ミルクの記録に添える「おまけ」の入力なので確認ダイアログは出さず、失敗しても静かに無視する。
+  function addPeeLogs(times) {
+    if (!times || times.length === 0) return;
+    var newTimes = times.filter(function (t) {
+      return !state.pees.some(function (p) { return Math.abs(new Date(p) - new Date(t)) < HISTORY_DEDUPE_MINUTES * 60000; });
+    });
+    if (newTimes.length === 0) return;
+    state = Object.assign({}, state, { pees: state.pees.concat(newTimes) });
+    saveState();
+  }
+  function addPoopLogs(times) {
+    if (!times || times.length === 0) return;
+    var newTimes = times.filter(function (t) {
+      return !state.poops.some(function (p) { return Math.abs(new Date(p) - new Date(t)) < HISTORY_DEDUPE_MINUTES * 60000; });
+    });
+    if (newTimes.length === 0) return;
+    state = Object.assign({}, state, { poops: state.poops.concat(newTimes) });
+    saveState();
+  }
+  // 同じ日付の体重が既にあれば置き換える(ぴよログは同日複数回計測でも最後の値を採用するため)
+  function addWeightEntries(entries) {
+    if (!entries || entries.length === 0) return;
+    var merged = state.weightHistory.filter(function (w) {
+      return !entries.some(function (e) { return e.date === w.date; });
+    }).concat(entries);
+    state = Object.assign({}, state, { weightHistory: merged });
+    saveState();
+  }
+  /* ---------- 配信データ(history.json)の取得とマージ済みアクセサ ---------- */
+  // 配信データはメモリ上でのみ保持し、localStorageには永続化しない
+  // (再配信のたびにマージ結果を書き戻すと重複が増殖するため)。
+  var remoteHistory = null;
+  // 取得の成否が確定したか。成功・失敗どちらでもtrueになる。
+  // 「きょうのようす」のように、判断が揺れると不安を与える表示の出し分けに使う。
+  var remoteHistoryResolved = false;
+  function fetchRemoteHistory() {
+    fetch(HISTORY_URL)
+      .then(function (res) {
+        if (!res.ok) throw new Error("history.json fetch failed: " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        remoteHistory = data;
+      })
+      .catch(function (err) {
+        // オフライン・配信データ未設置などでも通常どおり動作させる(localStorageのみで継続)
+        console.error("[sakura-milk-navi] 配信データの取得に失敗しました。ローカルの記録のみで続行します。", err);
+      })
+      .then(function () {
+        // 成否が決まってから再計算する。取得は画面の初回表示より後になるため。
+        remoteHistoryResolved = true;
+        rerenderCurrentScreen();
+      });
+  }
+  function getMergedFeedLogs() {
+    return mergeFeedLogs(state.feedLogs, remoteHistory ? remoteHistory.feeds : null);
+  }
+  function getMergedPees() {
+    return mergeTimeEvents(state.pees, remoteHistory ? remoteHistory.pees : null);
+  }
+  function getMergedPoops() {
+    return mergeTimeEvents(state.poops, remoteHistory ? remoteHistory.poops : null);
+  }
+  function getMergedWeightHistory() {
+    return mergeWeightHistory(state.weightHistory, remoteHistory ? remoteHistory.weights : null);
+  }
+  function getTodayPeeCount() {
+    var todayStr = formatDateISO(new Date());
+    return getMergedPees().filter(function (t) { return t.slice(0, 10) === todayStr; }).length;
+  }
+  function getDaysSincePoop() {
+    return calcDaysSincePoop(getMergedPoops(), new Date());
   }
   /* ---------- プッシュ通知 ---------- */
   // ワーカーをデプロイしたら worker/README の手順に沿って下の2つを実際の値に書き換えてね。
@@ -779,12 +1213,12 @@
       var subscription = await registration.pushManager.getSubscription();
       if (!subscription) return;
       var perFeed = getPerFeedMl();
-      var cycle = getCycleMinutes();
+      var info = getCycleInfo();
       var lastLog = getLastFeedLog();
       var now = new Date();
       var remainingBudget = Math.max(0, getDailyTotalMl() - getTodayTotalMl());
-      var nextFeed = (perFeed > 0 && cycle > 0)
-        ? calcNextFeed(lastLog, perFeed, cycle, remainingBudget, now)
+      var nextFeed = (perFeed > 0 && info.cycleMinutes > 0)
+        ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now)
         : { done: true };
       var syncPayload = {
         subscription: subscription.toJSON(),
@@ -848,7 +1282,9 @@
   }
   /* ---------- 画面切り替え ---------- */
   var SCREENS = ["home", "irregular", "records", "evidence", "settings"];
+  var currentScreenName = "home";
   function showScreen(name) {
+    currentScreenName = name;
     SCREENS.forEach(function (s) {
       var el = document.getElementById("screen-" + s);
       if (el) el.hidden = s !== name;
@@ -863,10 +1299,19 @@
     if (name === "settings") renderSettings();
     window.scrollTo(0, 0);
   }
+  // 配信データの取得完了時など、画面遷移を伴わずに今見ている画面だけ再計算したいときに使う。
+  // showScreenと違ってスクロール位置は動かさない。
+  function rerenderCurrentScreen() {
+    if (currentScreenName === "home") renderHome();
+    else if (currentScreenName === "irregular") renderIrregular();
+    else if (currentScreenName === "records") renderRecords();
+    else if (currentScreenName === "evidence") renderEvidence();
+    else if (currentScreenName === "settings") renderSettings();
+  }
   /* ---------- ホーム画面 ---------- */
   function renderHome() {
     var perFeed = getPerFeedMl();
-    var cycle = getCycleMinutes();
+    var info = getCycleInfo();
     var lastLog = getLastFeedLog();
     var now = new Date();
     var timeEl = document.getElementById("next-feed-time");
@@ -874,14 +1319,35 @@
     var todayTotal = getTodayTotalMl();
     var dailyTotal = getDailyTotalMl();
     var remainingBudget = Math.max(0, dailyTotal - todayTotal);
-    var nextFeed = (perFeed > 0 && cycle > 0) ? calcNextFeed(lastLog, perFeed, cycle, remainingBudget, now) : { done: true };
+    var nextFeed = (perFeed > 0 && info.cycleMinutes > 0)
+      ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now)
+      : { done: true };
+    var noteEl = document.getElementById("next-feed-note");
+    var hintEl = document.getElementById("next-feed-hint");
+    var prepEl = document.getElementById("next-feed-prep");
     if (nextFeed.done) {
       timeEl.textContent = "🌸";
       subEl.textContent = "きょうの目安ぶんは完了🌸 よくがんばったね";
+      noteEl.hidden = true;
+      hintEl.hidden = true;
+      prepEl.hidden = true;
     } else {
       var remainMin = Math.round((nextFeed.time - now) / 60000);
       timeEl.textContent = formatTime(nextFeed.time) + " ごろ";
-      subEl.textContent = nextFeed.ml + "ml ・ " + (remainMin > 0 ? "あと " + formatDurationMinutes(remainMin) : "そろそろの時間だよ");
+      // next-feed-subは時間の情報だけに戻す。「つくる量」は下のnext-feed-prepで目立たせる。
+      subEl.textContent = remainMin > 0 ? "あと " + formatDurationMinutes(remainMin) : "そろそろの時間だよ";
+      // 機能7: 主役は「つくる量」(スプーンの手数が少ない量)。夜中に見て動く情報なので埋もれさせない。
+      var prepPlan = calcPrepPlan(nextFeed.ml);
+      prepEl.textContent = formatPrepPlan(prepPlan);
+      prepEl.hidden = false;
+      setMessageWithLineBreaks(hintEl, "飲む目安は" + nextFeed.ml + "ml。残しても、ぜんぶ飲んでも大丈夫");
+      hintEl.hidden = false;
+      // 目安の時刻はあくまで「用意をはじめる合図」。起こしてまであげる必要はない。
+      noteEl.hidden = remainMin > NEXT_FEED_PREP_MINUTES;
+      if (!noteEl.hidden) {
+        // 1文=1行。iPhoneの幅でも折り返さないよう、各文を短く保つこと。
+        setMessageWithLineBreaks(noteEl, "寝てるなら起こさなくて大丈夫。先にミルクだけ用意してあげてね");
+      }
     }
     var range = getDailyTargetRange();
     var pct = dailyTotal > 0 ? clamp((todayTotal / dailyTotal) * 100, 0, 100) : 0;
@@ -892,28 +1358,42 @@
     // 警告はレンジ上限(体重×200ml/kg相当)を超えたときだけ。目安内の多め・少なめは正常のうち。
     if (range.max > 0 && todayTotal > range.max) {
       warnEl.hidden = false;
-      warnEl.textContent = "今日は目安の上限(" + Math.round(range.max) + "ml)より多めです。さくらたんの様子を見て、心配なら助産師さんに相談してね";
+      warnEl.textContent = "今日は目安の上限(" + Math.round(range.max) + "ml)より多めです。さくらたんの様子を見て、心配ならみつひこに相談してね";
     } else {
       warnEl.hidden = true;
     }
     setMessageWithLineBreaks(
       document.getElementById("encouragement-text"),
       pickRandom(getMessagePool(now), DEFAULT_PAPA_MESSAGES[0]));
-    renderNightBanner(lastLog, now);
+    renderHomeBanner(lastLog, now);
+    renderTodayStatusCard(now);
     var panel = document.getElementById("feed-panel");
     if (!panel.hidden) {
       document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     }
     renderTimeChart(now);
   }
-  function renderNightBanner(lastLog, now) {
-    var slot = document.getElementById("home-banner-slot");
-    slot.innerHTML = "";
+  // home-banner-slotには夜間分の記録漏れ通知(機能既存)と、ぐずり時間帯の予告(機能2)の
+  // どちらか一方だけを出す。時間帯が重ならない(朝5-10時 / 14時台)ので競合はしない。
+  function shouldShowNightMissingBanner(lastLog, now) {
     var hour = now.getHours();
     var isMorningWindow = hour >= 5 && hour < 10;
     var gapMinutes = lastLog ? (now - new Date(lastLog.at)) / 60000 : Infinity;
-    var looksMissing = !lastLog || gapMinutes > getCycleMinutes() + 60;
-    if (!isMorningWindow || !looksMissing) return;
+    // 判定には月齢の標準周期を使う。実測周期は短くなりがちで、
+    // 夜のまとめ寝のたびに「記録漏れかも」と誤検知してしまうため。
+    var looksMissing = !lastLog || gapMinutes > getCycleInfo().standardCycleMinutes + 60;
+    return isMorningWindow && looksMissing;
+  }
+  // 機能2: 夕方区分の周期が全体の実測周期よりはっきり短い(75%以下)ときは、この後ぐずりやすい
+  // 傾向があるとみて、14時台の1時間だけ先に一声かけておく。
+  function shouldShowFussyTimeBanner(now) {
+    var hour = now.getHours();
+    if (hour < FUSSY_WINDOW_START_HOUR || hour >= FUSSY_WINDOW_END_HOUR) return false;
+    var info = getCycleInfo();
+    if (!info.cycleMinutes) return false;
+    return info.bucketCycles.evening <= info.cycleMinutes * FUSSY_EVENING_RATIO_THRESHOLD;
+  }
+  function buildNightMissingBanner() {
     var banner = document.createElement("div");
     banner.className = "banner";
     var p = document.createElement("p");
@@ -927,34 +1407,106 @@
     });
     banner.appendChild(p);
     banner.appendChild(btn);
-    slot.appendChild(banner);
+    return banner;
+  }
+  // ボタンは無い予告のみのバナー。文言は確定済みのため変更しないこと。
+  function buildFussyTimeBanner() {
+    var banner = document.createElement("div");
+    banner.className = "banner";
+    var p = document.createElement("p");
+    setMessageWithLineBreaks(p, "このあとはぐずりやすい時間だよ。いまのうちに少し休んでおこうね");
+    banner.appendChild(p);
+    return banner;
+  }
+  function renderHomeBanner(lastLog, now) {
+    var slot = document.getElementById("home-banner-slot");
+    slot.innerHTML = "";
+    if (shouldShowNightMissingBanner(lastLog, now)) {
+      slot.appendChild(buildNightMissingBanner());
+      return;
+    }
+    if (shouldShowFussyTimeBanner(now)) {
+      slot.appendChild(buildFussyTimeBanner());
+    }
+  }
+  // 機能3・6: 「きょうのようす」カード。おしっこ/うんちは診断せず、相談を促すトーンのみ。
+  function renderTodayStatusCard(now) {
+    var card = document.getElementById("today-status-card");
+    var peeEl = document.getElementById("today-status-pee");
+    var poopEl = document.getElementById("today-status-poop");
+    // 配信データが届くまでは判断を保留する。ローカルの記録だけで先に
+    // 「うんちが3日出ていないよ」を出すと、配信データが届いた瞬間に消えてしまい、
+    // はるたんを一瞬だけ不安にさせることになるため。
+    if (!remoteHistoryResolved) { card.hidden = true; return; }
+    var peeMessage = calcPeeMessage(getTodayPeeCount(), now.getHours());
+    var poopMessage = calcPoopMessage(getDaysSincePoop());
+    if (peeMessage) { setMessageWithLineBreaks(peeEl, peeMessage); peeEl.hidden = false; } else { peeEl.hidden = true; }
+    if (poopMessage) { setMessageWithLineBreaks(poopEl, poopMessage); poopEl.hidden = false; } else { poopEl.hidden = true; }
+    card.hidden = !peeMessage && !poopMessage;
   }
   var feedPanelMl = 0;
+  // おしっこ/うんちの「おまけ」トグル。任意項目で、パネルを開き直す/閉じる/記録するたびにオフへ戻す。
+  var feedPanelPee = false;
+  var feedPanelPoop = false;
+  // トグルボタンの押下状態の見た目を更新する。既存のbtn-ghost(オフ)/btn-secondary(オン)を
+  // 使い回すだけなので新規CSSは足さない。aria-pressedで状態を明示する。
+  function setToggleButtonPressed(btn, pressed) {
+    btn.setAttribute("aria-pressed", pressed ? "true" : "false");
+    btn.classList.toggle("btn-ghost", !pressed);
+    btn.classList.toggle("btn-secondary", pressed);
+  }
+  // 機能8: 「飲みはじめた時間」表示の更新。referenceNowを超えて進める/
+  // (referenceNow - TIME_ADJUST_MAX_PAST_MINUTES)より遡ることはできないので、
+  // 上下限に達したボタンはdisabledにする。
+  function updateFeedTimeDisplay(at, valueElId, minusBtnId, plusBtnId, referenceNow) {
+    var minAt = new Date(referenceNow.getTime() - TIME_ADJUST_MAX_PAST_MINUTES * 60000);
+    document.getElementById(valueElId).textContent = formatTime(at);
+    document.getElementById(minusBtnId).disabled = at.getTime() <= minAt.getTime();
+    document.getElementById(plusBtnId).disabled = at.getTime() >= referenceNow.getTime();
+  }
+  function resetFeedPanelToggles() {
+    feedPanelPee = false;
+    feedPanelPoop = false;
+    setToggleButtonPressed(document.getElementById("feed-pee-toggle"), false);
+    setToggleButtonPressed(document.getElementById("feed-poop-toggle"), false);
+  }
+  var feedPanelAt = new Date();
+  var feedPanelReferenceNow = new Date();
+  function resetFeedPanelTime() {
+    feedPanelReferenceNow = new Date();
+    feedPanelAt = feedPanelReferenceNow;
+    updateFeedTimeDisplay(feedPanelAt, "feed-time-value", "feed-time-minus", "feed-time-plus", feedPanelReferenceNow);
+  }
   function openFeedPanel() {
     var perFeed = getPerFeedMl();
     var remainingBudget = Math.max(0, getDailyTotalMl() - getTodayTotalMl());
     feedPanelMl = remainingBudget < 20 ? perFeed : roundToUnit(Math.min(perFeed, remainingBudget), 5);
     document.getElementById("feed-value").textContent = feedPanelMl + "ml";
+    resetFeedPanelToggles();
+    resetFeedPanelTime();
     document.getElementById("feed-panel").hidden = false;
   }
   function closeFeedPanel() {
     document.getElementById("feed-panel").hidden = true;
+    resetFeedPanelToggles();
   }
   /* ---------- きょうのタイムチャート ---------- */
   // 実績(今日の記録)と、calcNextFeedを起点に cycle 間隔で残り予算Rを前から配分した予定を1本のリストにする。
   function computeTimeChartData(now) {
     var perFeed = getPerFeedMl();
-    var cycle = getCycleMinutes();
+    var info = getCycleInfo();
     var dailyTotal = getDailyTotalMl();
     var todayStr = formatDateISO(now);
-    var todayLogs = state.feedLogs
+    var todayLogs = getMergedFeedLogs()
       .filter(function (l) { return l.at.slice(0, 10) === todayStr; })
       .slice()
       .sort(function (a, b) { return new Date(a.at) - new Date(b.at); });
     var sumToday = todayLogs.reduce(function (sum, l) { return sum + l.ml; }, 0);
     var remainingBudget = Math.max(0, dailyTotal - sumToday);
     var lastLog = getLastFeedLog();
-    var nextFeed = (perFeed > 0 && cycle > 0) ? calcNextFeed(lastLog, perFeed, cycle, remainingBudget, now) : { done: true };
+    var nextFeed = (perFeed > 0 && info.cycleMinutes > 0)
+      ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now)
+      : { done: true };
     var actualRows = todayLogs.map(function (l) {
       return { time: new Date(l.at), ml: l.ml, irregular: !!l.irregular };
     });
@@ -977,7 +1529,9 @@
           rows[rows.length - 1].ml += remaining;
           break;
         }
-        t = new Date(t.getTime() + cycle * 60000);
+        // 予定の刻み幅(機能1)も、その予定時刻が属する区分の周期に従う
+        var stepCycle = resolveCycleMinutesForBucket(info.bucketCycles, info.cycleMinutes, t.getHours());
+        t = new Date(t.getTime() + stepCycle * 60000);
         ml = roundToUnit(Math.min(perFeed, remaining));
       }
       rows.forEach(function (r) {
@@ -1173,7 +1727,7 @@
   function renderIrregular() {
     closeIrregularFeedPanel();
     var perFeed = getPerFeedMl();
-    var cycle = getCycleMinutes();
+    var info = getCycleInfo();
     var dailyTotal = getDailyTotalMl();
     var todayTotal = getTodayTotalMl();
     var remainingBudget = Math.max(0, dailyTotal - todayTotal);
@@ -1191,12 +1745,14 @@
       var elapsedMinutes = (now - new Date(lastLog.at)) / 60000;
       document.getElementById("irregular-elapsed").textContent = "前回の授乳から " + formatDurationMinutes(elapsedMinutes);
       if (remainingBudget < 20) {
-        answerEl.innerHTML = '<p class="wait-text">きょうの目安ぶんは、もうあげきっているよ。白湯やおしゃぶり、外の空気で気分転換もためしてみてね。それでも心配なときは助産師さんに相談を</p>';
+        answerEl.innerHTML = '<p class="wait-text">きょうの目安ぶんは、もうあげきっているよ。白湯やおしゃぶり、外の空気で気分転換もためしてみてね。それでも心配なときはみつひこに相談してね</p>';
         giveBtn.disabled = true;
         giveBtn.textContent = "🍼 あげた";
         irregularResult = null;
       } else {
-        var result = calcIrregularAmount(perFeed, elapsedMinutes, cycle);
+        // 「今あげてよい量」は、前回授乳の時刻が属する区分の周期を使う(機能1)
+        var cycleForElapsed = resolveCycleMinutesForBucket(info.bucketCycles, info.cycleMinutes, new Date(lastLog.at).getHours());
+        var result = calcIrregularAmount(perFeed, elapsedMinutes, cycleForElapsed);
         if (result.canGiveNow) {
           result = Object.assign({}, result, { okMl: roundToUnit(Math.min(result.okMl, remainingBudget)) });
         }
@@ -1213,10 +1769,14 @@
           // 前借り後を想定した仮のlastLogでcalcNextFeedを計算し、記録後の実際の次回表示と一致させる。
           var hypotheticalLog = { at: toLocalISO(now), ml: result.okMl, irregular: true };
           var remainingAfterGive = Math.max(0, dailyTotal - (todayTotal + result.okMl));
-          var nextFeed = calcNextFeed(hypotheticalLog, perFeed, cycle, remainingAfterGive, now);
+          var nextFeed = calcNextFeed(hypotheticalLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingAfterGive, now);
           var nextText = nextFeed.done
             ? "これで、きょうの目安ぶんは完了になりそうだよ"
             : formatTime(nextFeed.time) + " ごろに " + nextFeed.ml + "ml";
+          // 機能7: 「つくる量」を杯数で伝える(量の表示のすぐ下)。2種類の内訳でも2行におさまるよう、
+          // 内訳行と「残しても〜」を別の行(pタグ)に分ける(1文=1行の原則に揃える)。
+          var prepLine = '<p class="subline-prep">' + formatPrepPlan(calcPrepPlan(result.okMl), { withVerb: false }) + '</p>' +
+            '<p class="subline-prep">残してもだいじょうぶだよ</p>';
           if (result.isAdvance) {
             var advanceSubline = nextFeed.done
               ? "そのぶん、これで今日の目安ぶんは完了になりそうだよ。1日の目安の中で調整してるから安心してね"
@@ -1224,12 +1784,14 @@
             answerEl.innerHTML =
               '<p class="eyebrow">👉 次のぶんから前借りしよう</p>' +
               '<p class="headline">' + result.okMl + "ml</p>" +
+              prepLine +
               '<p class="subline">' + advanceSubline + '</p>' +
               '<p class="subline">あわてなくて大丈夫。おしゃぶりやネムリラで落ち着くこともあるよ</p>';
           } else {
             answerEl.innerHTML =
               '<p class="eyebrow">👉 今あげてOKな量</p>' +
               '<p class="headline">' + result.okMl + "ml</p>" +
+              prepLine +
               '<p class="subline">あげたら次は… ' + nextText + '</p>';
           }
           giveBtn.disabled = false;
@@ -1246,18 +1808,39 @@
       pickRandom(getMessagePool(now), "泣いてても大丈夫、はるたんのペースでOK"));
   }
   var irregularFeedMl = 0;
+  var irregularFeedPee = false;
+  var irregularFeedPoop = false;
+  function resetIrregularFeedPanelToggles() {
+    irregularFeedPee = false;
+    irregularFeedPoop = false;
+    setToggleButtonPressed(document.getElementById("irregular-feed-pee-toggle"), false);
+    setToggleButtonPressed(document.getElementById("irregular-feed-poop-toggle"), false);
+  }
+  var irregularFeedPanelAt = new Date();
+  var irregularFeedPanelReferenceNow = new Date();
+  function resetIrregularFeedPanelTime() {
+    irregularFeedPanelReferenceNow = new Date();
+    irregularFeedPanelAt = irregularFeedPanelReferenceNow;
+    updateFeedTimeDisplay(irregularFeedPanelAt, "irregular-feed-time-value", "irregular-feed-time-minus", "irregular-feed-time-plus", irregularFeedPanelReferenceNow);
+  }
   function openIrregularFeedPanel() {
     if (!irregularResult || !irregularResult.canGiveNow) return;
     irregularFeedMl = irregularResult.okMl;
     document.getElementById("irregular-feed-value").textContent = irregularFeedMl + "ml";
+    resetIrregularFeedPanelToggles();
+    resetIrregularFeedPanelTime();
     document.getElementById("irregular-feed-panel").hidden = false;
   }
   function closeIrregularFeedPanel() {
     document.getElementById("irregular-feed-panel").hidden = true;
+    resetIrregularFeedPanelToggles();
   }
   function confirmIrregularGive() {
     if (irregularFeedMl < 5) { showToast("量を確認してね"); return; }
-    addFeedLog(irregularFeedMl, new Date(), true);
+    var at = irregularFeedPanelAt;
+    addFeedLog(irregularFeedMl, at, true);
+    if (irregularFeedPee) addPeeLogs([toLocalISO(at)]);
+    if (irregularFeedPoop) addPoopLogs([toLocalISO(at)]);
     closeIrregularFeedPanel();
     showToast("記録したよ。よくがんばったね");
     showScreen("home");
@@ -1334,7 +1917,8 @@
     form.className = "edit-form";
     var timeVal = log.at.slice(11, 16);
     form.innerHTML =
-      '<div class="row"><input type="time" value="' + timeVal + '" class="edit-time">' +
+      '<p class="field-note" style="margin:0 0 4px">飲みはじめた時間</p>' +
+      '<div class="row"><input type="time" value="' + timeVal + '" class="edit-time" aria-label="飲みはじめた時間">' +
       '<input type="number" step="10" value="' + log.ml + '" class="edit-ml"></div>' +
       '<div class="feed-panel-actions"><button class="btn btn-ghost edit-cancel">やめる</button>' +
       '<button class="btn btn-primary edit-save">保存</button></div>';
@@ -1349,15 +1933,25 @@
       renderRecords();
     });
   }
+  var manualAddPee = false;
+  var manualAddPoop = false;
+  function resetManualAddToggles() {
+    manualAddPee = false;
+    manualAddPoop = false;
+    setToggleButtonPressed(document.getElementById("manual-pee-toggle"), false);
+    setToggleButtonPressed(document.getElementById("manual-poop-toggle"), false);
+  }
   function openManualAddForm() {
     var now = new Date();
     document.getElementById("manual-date").value = formatDateISO(now);
     document.getElementById("manual-time").value = formatTime(now);
     document.getElementById("manual-ml").value = getPerFeedMl();
+    resetManualAddToggles();
     document.getElementById("manual-add-form").hidden = false;
   }
   function closeManualAddForm() {
     document.getElementById("manual-add-form").hidden = true;
+    resetManualAddToggles();
   }
   function saveManualAdd() {
     var date = document.getElementById("manual-date").value;
@@ -1369,33 +1963,62 @@
     }
     var atDate = new Date(date + "T" + time);
     addFeedLog(ml, atDate, false);
+    if (manualAddPee) addPeeLogs([toLocalISO(atDate)]);
+    if (manualAddPoop) addPoopLogs([toLocalISO(atDate)]);
     showToast("記録を追加したよ");
     closeManualAddForm();
     renderRecords();
   }
   /* ---------- ぴよログ取り込み ---------- */
-  // エクスポートテキストから「HH:MM … ミルク XXml」行を抽出する。
+  // エクスポートテキストから「ミルク/おしっこ/うんち/体重」の行を抽出する(1-D)。
   // 日付はテキスト内の「yyyy/m/d」表記を優先し、無ければ今日として扱う。
+  // うんちのカッコ内の性状(多め/黄色など)はプライバシー上の理由で取り込まず、時刻だけを残す。
   function parsePiyologText(text, fallbackDateStr) {
-    var dateStr = fallbackDateStr;
-    var dateMatch = text.match(/(20\d{2})\/(\d{1,2})\/(\d{1,2})/);
-    if (dateMatch) {
-      dateStr = dateMatch[1] + "-" + pad2(parseInt(dateMatch[2], 10)) + "-" + pad2(parseInt(dateMatch[3], 10));
-    }
+    var dateStr = null;
     var feeds = [];
+    var pees = [];
+    var poops = [];
+    var weightsByDate = {}; // 同日複数あれば最後の値を残す
     text.split(/\r?\n/).forEach(function (line) {
-      var m = line.match(/(\d{1,2}):(\d{2})\s.*?ミルク\s*(\d+)\s*ml/);
-      if (!m) return;
-      feeds.push({ at: dateStr + "T" + pad2(parseInt(m[1], 10)) + ":" + m[2], ml: parseInt(m[3], 10) });
+      // 「2026/7/24(金)」のような日付見出しが来たら、以降の行の日付を切り替える。
+      // 月まるごと・数日分をまとめてエクスポートしても正しい日付で取り込める。
+      var d = line.match(/^\s*(20\d{2})\/(\d{1,2})\/(\d{1,2})/);
+      if (d) {
+        dateStr = d[1] + "-" + pad2(parseInt(d[2], 10)) + "-" + pad2(parseInt(d[3], 10));
+        return;
+      }
+      var day = dateStr || fallbackDateStr;
+      var feedMatch = line.match(/(\d{1,2}):(\d{2})\s.*?ミルク\s*(\d+)\s*ml/);
+      if (feedMatch) {
+        feeds.push({ at: day + "T" + pad2(parseInt(feedMatch[1], 10)) + ":" + feedMatch[2], ml: parseInt(feedMatch[3], 10) });
+        return;
+      }
+      var peeMatch = line.match(/^\s*(\d{1,2}):(\d{2})\s+おしっこ/);
+      if (peeMatch) {
+        pees.push(day + "T" + pad2(parseInt(peeMatch[1], 10)) + ":" + peeMatch[2]);
+        return;
+      }
+      var poopMatch = line.match(/^\s*(\d{1,2}):(\d{2})\s+うんち/);
+      if (poopMatch) {
+        poops.push(day + "T" + pad2(parseInt(poopMatch[1], 10)) + ":" + poopMatch[2]);
+        return;
+      }
+      var weightMatch = line.match(/^\s*(\d{1,2}):(\d{2})\s+体重\s*([\d.]+)\s*kg/);
+      if (weightMatch) {
+        weightsByDate[day] = Math.round(parseFloat(weightMatch[3]) * 1000);
+        return;
+      }
     });
-    return feeds;
+    var weights = Object.keys(weightsByDate).map(function (d2) { return { date: d2, grams: weightsByDate[d2] }; });
+    return { feeds: feeds, pees: pees, poops: poops, weights: weights };
   }
-  // テキストからミルク行を取り込む共通処理。取り込めた件数を返す(-1=ミルク行なし)。
+  // テキストからミルク・おしっこ・うんち・体重を取り込む共通処理。戻り値は既存の挙動を壊さないよう
+  // 取り込めたミルクの件数のみ(-1=ミルク行なし)。おしっこ/うんち/体重の重複排除ロジックは既存のまま維持する。
   function importPiyologText(text) {
-    var feeds = parsePiyologText(text, formatDateISO(new Date()));
-    if (feeds.length === 0) return -1;
+    var parsed = parsePiyologText(text, formatDateISO(new Date()));
+    if (parsed.feeds.length === 0) return -1;
     var added = 0;
-    feeds.forEach(function (f) {
+    parsed.feeds.forEach(function (f) {
       var isDuplicate = state.feedLogs.some(function (l) {
         return l.ml === f.ml && Math.abs(new Date(l.at) - new Date(f.at)) < 5 * 60000;
       });
@@ -1403,6 +2026,9 @@
       addFeedLog(f.ml, new Date(f.at), false);
       added++;
     });
+    addPeeLogs(parsed.pees);
+    addPoopLogs(parsed.poops);
+    addWeightEntries(parsed.weights);
     renderRecords();
     return added;
   }
@@ -1474,10 +2100,6 @@
     if (months === 0 && typeof days === "number") return "生後" + days + "日";
     return months === 0 ? "生後1ヶ月未満" : "生後" + months + "ヶ月";
   }
-  function formatHours(minutes) {
-    var hours = minutes / 60;
-    return (hours % 1 === 0) ? String(hours) : hours.toFixed(1);
-  }
   function renderEvidence() {
     var s = state.settings;
     var titleEl = document.getElementById("evidence-explain-title");
@@ -1487,14 +2109,19 @@
     var days = getAgeDays();
     var ageLabel = formatAgeLabel(months, days);
     if (row) {
-      var feeds = row.defFeeds;
-      var cycleHours = formatHours(calcCycleMinutesForFeeds(feeds));
+      var info = getCycleInfo();
+      var feeds = info.feedsPerDay;
+      var cycleText = formatDurationMinutes(info.cycleMinutes);
       var range = getDailyTargetRange();
       var rangeText = "1日の合計は" + Math.round(range.min) + "〜" + Math.round(range.max) + "mlがレンジの目安";
+      // 実測ペースを使っているときは、なぜ表の回数と違うのかを先に説明する
+      var paceSentence = info.isObserved
+        ? "いまは、さくらたんの実際の記録から読みとった「約" + cycleText + "おき」のペースで計算しているよ（下の表の一般的な目安は" + row.times + "だけど、赤ちゃんによってペースは違うから、さくらたん自身の記録のほうを優先しているの）。"
+        : "";
       if (row.dayRule) {
         titleEl.textContent = "生まれてすぐは、日数が教えてくれるよ";
         explainEl.textContent =
-          "生後1週間ごろまでは「生後日数×10ml」が1回量の一般的な目安だよ。さくらたんは" + ageLabel + "だから1回約" + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleHours + "時間おき。" + rangeText + "。足りなさそうなら+10mlしても大丈夫とされているよ。";
+          "生後1週間ごろまでは「生後日数×10ml」が1回量の一般的な目安だよ。" + paceSentence + "さくらたんは" + ageLabel + "だから1回約" + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleText + "おき。" + rangeText + "。足りなさそうなら+10mlしても大丈夫とされているよ。";
       } else if (hasWeight()) {
         titleEl.textContent = "さくらたんの体重が教えてくれるよ";
         var estimatedW = getWeightForCalc();
@@ -1503,11 +2130,11 @@
           ? "体重は" + entry.date + "に入れた" + entry.grams + "gから、標準の増えかた（1日約" + WEIGHT_GAIN_PER_DAY_UNDER_3M + "g）で今日は約" + Math.round(estimatedW) + "gと推定しているよ。"
           : "";
         explainEl.textContent =
-          "1日の合計の目安は、体重1kgあたり150〜200ml（国際的にも使われているレンジ）で計算しているよ。" + projectSentence + "さくらたんは" + ageLabel + "だから、" + rangeText + "。それを1日" + feeds + "回・約" + cycleHours + "時間おきに分けて、1回はこの時期のレンジ（" + row.minMl + "〜" + row.maxMl + "ml）におさまるように整えているよ。レンジの中なら多め・少なめの日があって当たり前だよ。";
+          "1日の合計の目安は、体重1kgあたり150〜200ml（国際的にも使われているレンジ）と、この時期の月齢別の目安のうち、広いほうで計算しているよ。" + projectSentence + paceSentence + "さくらたんは" + ageLabel + "だから、" + rangeText + "。それを1日" + feeds + "回・約" + cycleText + "おきに分けているよ。レンジの中なら多め・少なめの日があって当たり前だよ。";
       } else {
         titleEl.textContent = "さくらたんの月齢から計算してるよ";
         explainEl.textContent =
-          "いまは誕生日（2026年7月9日）から計算した" + ageLabel + "と、この時期の標準的な体重（約" + (row.stdMid / 1000).toFixed(1) + "kg）で目安を出しているよ。1回 " + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleHours + "時間おきで、" + rangeText + "。設定で体重を入れると、さくらたんの体にもっとぴったりの量になるよ。";
+          "いまは誕生日（2026年7月9日）から計算した" + ageLabel + "と、この時期の標準的な体重（約" + (row.stdMid / 1000).toFixed(1) + "kg）で目安を出しているよ。" + paceSentence + "1回 " + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleText + "おきで、" + rangeText + "。設定で体重を入れると、さくらたんの体にもっとぴったりの量になるよ。";
       }
     } else {
       titleEl.textContent = "さくらたんの月齢から計算してるよ";
@@ -1522,6 +2149,43 @@
       tbody.appendChild(tr);
     });
     renderMonthsWeightTable(row);
+    renderGrowthCard();
+  }
+  // 機能5: 成長のあしあと。テキストで根拠を伝える設計のためグラフは作らない。
+  // 比較できるデータがなければカードごと非表示にする。
+  function renderGrowthCard() {
+    var card = document.getElementById("growth-card");
+    var feedLine = document.getElementById("growth-feed-line");
+    var weightLine = document.getElementById("growth-weight-line");
+    var now = new Date();
+    var todayStr = formatDateISO(now);
+    var pastStr = formatDateISO(new Date(now.getTime() - GROWTH_COMPARE_DAYS_AGO * 86400000));
+    var logs = getMergedFeedLogs();
+    var pastMedian = calcMedianMlForDate(logs, pastStr);
+    var todayMedian = calcMedianMlForDate(logs, todayStr);
+    // 体重と同じ理由で、2週間前と同じ量なら出さない（成長のあしあとにならないため）
+    var hasFeedCompare = pastMedian !== null && todayMedian !== null
+      && Math.round(pastMedian) !== Math.round(todayMedian);
+    if (hasFeedCompare) {
+      setMessageWithLineBreaks(feedLine, "2週間前は1回" + Math.round(pastMedian) + "ml。いまは" + Math.round(todayMedian) + "mlだね");
+      feedLine.hidden = false;
+    } else {
+      feedLine.hidden = true;
+    }
+    var weights = getMergedWeightHistory();
+    var sorted = weights.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var firstKg = weights.length ? (sorted[0].grams / 1000).toFixed(1) : null;
+    var lastKg = weights.length ? (sorted[sorted.length - 1].grams / 1000).toFixed(1) : null;
+    // 表示上おなじ数字になるとき（まだ増えていない・同じ値を2回入れた等）は出さない。
+    // 「3.3kgから3.3kgになったよ」では成長のあしあとにならないため。
+    var hasWeightCompare = weights.length >= 2 && firstKg !== lastKg;
+    if (hasWeightCompare) {
+      setMessageWithLineBreaks(weightLine, "体重は" + firstKg + "kgから" + lastKg + "kgになったよ");
+      weightLine.hidden = false;
+    } else {
+      weightLine.hidden = true;
+    }
+    card.hidden = !hasFeedCompare && !hasWeightCompare;
   }
   function renderMonthsWeightTable(currentRow) {
     var tbody = document.getElementById("months-weight-tbody");
@@ -1572,14 +2236,17 @@
     var row = getAgeRow();
     if (!row) { el.textContent = "誕生日を入れると目安が出るよ"; return; }
     var weight = raw !== "" ? (parseInt(raw, 10) || 0) : row.stdMid;
-    var rawMl = calcPerFeedRawMl(weight, row, getAgeDays());
-    var perFeed = clamp(rawMl, row.minMl, row.maxMl);
-    var feeds = row.defFeeds;
-    var cycleHours = formatHours(calcCycleMinutesForFeeds(feeds));
-    var clampNote = buildClampNote(row, rawMl, perFeed);
-    el.textContent = clampNote
-      ? "1回の目安量: " + perFeed + "ml（" + clampNote + "）"
-      : "1回の目安量: " + perFeed + "ml（" + cycleHours + "時間おき・1日" + feeds + "回）";
+    var ageDays = getAgeDays();
+    var rawMl = calcPerFeedRawMl(weight, row, ageDays);
+    var standardPerFeed = clamp(rawMl, row.minMl, row.maxMl);
+    // 入力中の体重でのプレビューなので、レンジも1日量もその場で計算し直す
+    var info = getCycleInfo();
+    var range = calcDailyTargetRange(weight, row, ageDays);
+    var dailyTotal = calcDailyTotalForFeeds(range, standardPerFeed, info.feedsPerDay);
+    var perFeed = calcPerFeedForFeeds(dailyTotal, standardPerFeed, info.feedsPerDay, info.standardFeedsPerDay, row.maxMl);
+    var clampNote = buildClampNote(row, rawMl, standardPerFeed);
+    el.textContent = "1回の目安量: " + perFeed + "ml（" + formatDurationMinutes(info.cycleMinutes) + "おき・1日" + info.feedsPerDay + "回"
+      + (clampNote ? "／" + clampNote : "") + "）";
   }
   function checkWeightRange() {
     var raw = document.getElementById("set-weight").value;
@@ -1635,10 +2302,59 @@
     });
     document.getElementById("feed-confirm").addEventListener("click", function () {
       if (feedPanelMl <= 0) { showToast("量が0mlだよ。+10で調整してね"); return; }
-      addFeedLog(feedPanelMl, new Date(), false);
+      var at = feedPanelAt;
+      addFeedLog(feedPanelMl, at, false);
+      if (feedPanelPee) addPeeLogs([toLocalISO(at)]);
+      if (feedPanelPoop) addPoopLogs([toLocalISO(at)]);
       closeFeedPanel();
       showToast("記録したよ。おつかれさま");
       renderHome();
+    });
+    document.getElementById("feed-time-minus").addEventListener("click", function () {
+      feedPanelAt = clampFeedTimeAdjust(new Date(feedPanelAt.getTime() - TIME_ADJUST_STEP_MINUTES * 60000), feedPanelReferenceNow);
+      updateFeedTimeDisplay(feedPanelAt, "feed-time-value", "feed-time-minus", "feed-time-plus", feedPanelReferenceNow);
+    });
+    document.getElementById("feed-time-plus").addEventListener("click", function () {
+      feedPanelAt = clampFeedTimeAdjust(new Date(feedPanelAt.getTime() + TIME_ADJUST_STEP_MINUTES * 60000), feedPanelReferenceNow);
+      updateFeedTimeDisplay(feedPanelAt, "feed-time-value", "feed-time-minus", "feed-time-plus", feedPanelReferenceNow);
+    });
+    var feedPeeToggleBtn = document.getElementById("feed-pee-toggle");
+    var feedPoopToggleBtn = document.getElementById("feed-poop-toggle");
+    feedPeeToggleBtn.addEventListener("click", function () {
+      feedPanelPee = !feedPanelPee;
+      setToggleButtonPressed(feedPeeToggleBtn, feedPanelPee);
+    });
+    feedPoopToggleBtn.addEventListener("click", function () {
+      feedPanelPoop = !feedPanelPoop;
+      setToggleButtonPressed(feedPoopToggleBtn, feedPanelPoop);
+    });
+    var irregularFeedPeeToggleBtn = document.getElementById("irregular-feed-pee-toggle");
+    var irregularFeedPoopToggleBtn = document.getElementById("irregular-feed-poop-toggle");
+    irregularFeedPeeToggleBtn.addEventListener("click", function () {
+      irregularFeedPee = !irregularFeedPee;
+      setToggleButtonPressed(irregularFeedPeeToggleBtn, irregularFeedPee);
+    });
+    irregularFeedPoopToggleBtn.addEventListener("click", function () {
+      irregularFeedPoop = !irregularFeedPoop;
+      setToggleButtonPressed(irregularFeedPoopToggleBtn, irregularFeedPoop);
+    });
+    document.getElementById("irregular-feed-time-minus").addEventListener("click", function () {
+      irregularFeedPanelAt = clampFeedTimeAdjust(new Date(irregularFeedPanelAt.getTime() - TIME_ADJUST_STEP_MINUTES * 60000), irregularFeedPanelReferenceNow);
+      updateFeedTimeDisplay(irregularFeedPanelAt, "irregular-feed-time-value", "irregular-feed-time-minus", "irregular-feed-time-plus", irregularFeedPanelReferenceNow);
+    });
+    document.getElementById("irregular-feed-time-plus").addEventListener("click", function () {
+      irregularFeedPanelAt = clampFeedTimeAdjust(new Date(irregularFeedPanelAt.getTime() + TIME_ADJUST_STEP_MINUTES * 60000), irregularFeedPanelReferenceNow);
+      updateFeedTimeDisplay(irregularFeedPanelAt, "irregular-feed-time-value", "irregular-feed-time-minus", "irregular-feed-time-plus", irregularFeedPanelReferenceNow);
+    });
+    var manualPeeToggleBtn = document.getElementById("manual-pee-toggle");
+    var manualPoopToggleBtn = document.getElementById("manual-poop-toggle");
+    manualPeeToggleBtn.addEventListener("click", function () {
+      manualAddPee = !manualAddPee;
+      setToggleButtonPressed(manualPeeToggleBtn, manualAddPee);
+    });
+    manualPoopToggleBtn.addEventListener("click", function () {
+      manualAddPoop = !manualAddPoop;
+      setToggleButtonPressed(manualPoopToggleBtn, manualAddPoop);
     });
     document.getElementById("btn-go-irregular").addEventListener("click", function () { showScreen("irregular"); });
     document.getElementById("irregular-back-top").addEventListener("click", function () { showScreen("home"); });
@@ -1669,6 +2385,9 @@
     document.getElementById("set-weight").addEventListener("input", function () { checkWeightRange(); updatePerFeedPreview(); });
     document.getElementById("btn-save-settings").addEventListener("click", saveSettings);
     showScreen("home");
+    // 配信データ(history.json)は起動後に取得し、取れたら画面を再計算する。
+    // 取得できなくてもlocalStorageだけで通常どおり動作させたいので、ここではawaitしない。
+    fetchRemoteHistory();
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
