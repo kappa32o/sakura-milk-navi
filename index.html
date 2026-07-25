@@ -893,9 +893,10 @@
     schedulePushSync();
   }
   // 回答の基準: 体重が入力されていれば体重ベース、なければ誕生日からの月齢ベース
+  // 体重の実測値があるか。端末で入力したものでも、配信データに含まれるものでもよい
+  // （どちらも「さくらたん本人の実測値」なので、目安の計算根拠として同じ重みで扱う）。
   function hasWeight() {
-    var w = state.settings.weightGrams;
-    return typeof w === "number" && w > 0;
+    return getLatestWeightEntry() !== null;
   }
   function getAgeDays() {
     return calcAgeDays(state.settings.birthDate, new Date());
@@ -917,11 +918,15 @@
   }
   // 最後に入力された体重（日付付き）。設定のweightGramsしかない古いデータは日付なし扱い。
   function getLatestWeightEntry() {
-    if (state.weightHistory.length > 0) {
-      var sorted = state.weightHistory.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    // 配信データの体重も同じ実測値として扱う（ぴよログで計った分がここに入る）
+    var history = getMergedWeightHistory();
+    if (history.length > 0) {
+      var sorted = history.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
       return sorted[0];
     }
-    if (hasWeight()) return { date: null, grams: state.settings.weightGrams };
+    // 日付を持たない古いデータ（設定のweightGramsしかない場合）へのフォールバック
+    var w = state.settings.weightGrams;
+    if (typeof w === "number" && w > 0) return { date: null, grams: w };
     return null;
   }
   // 今日の推定体重。入力から日が経っていても、標準的な増加ペース
@@ -1391,7 +1396,12 @@
     if (hour < FUSSY_WINDOW_START_HOUR || hour >= FUSSY_WINDOW_END_HOUR) return false;
     var info = getCycleInfo();
     if (!info.cycleMinutes) return false;
-    return info.bucketCycles.evening <= info.cycleMinutes * FUSSY_EVENING_RATIO_THRESHOLD;
+    // 夕方区分が未学習(null)のときは判断材料がないので出さない。
+    // nullを直接比較すると0に変換されて必ず条件を満たしてしまい、
+    // 記録が少ない時期に根拠のない予告を出してしまうため。
+    var eveningCycle = info.bucketCycles ? info.bucketCycles.evening : null;
+    if (!eveningCycle) return false;
+    return eveningCycle <= info.cycleMinutes * FUSSY_EVENING_RATIO_THRESHOLD;
   }
   function buildNightMissingBanner() {
     var banner = document.createElement("div");
@@ -2202,7 +2212,10 @@
   function renderSettings() {
     var s = state.settings;
     document.getElementById("set-birthdate").value = s.birthDate || "";
-    document.getElementById("set-weight").value = hasWeight() ? s.weightGrams : "";
+    // 入力欄に出すのは端末で入力した値だけ。配信データの体重をここに書き戻すと、
+    // 保存操作のたびに配信分が端末側の履歴として二重に増えてしまうため。
+    var inputWeight = (typeof s.weightGrams === "number" && s.weightGrams > 0) ? s.weightGrams : "";
+    document.getElementById("set-weight").value = inputWeight;
     updatePerFeedPreview();
     checkWeightRange();
     renderPushStatus();
