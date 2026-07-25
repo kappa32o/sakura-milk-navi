@@ -150,6 +150,10 @@
   .card p.body-text { line-height: 1.7; font-size: 0.9rem; margin: 0 0 8px; }
   .record-date-group { margin: 0 16px 18px; }
   .record-date-heading { font-size: 0.84rem; font-weight: 800; color: var(--text-muted); margin: 0 4px 8px; }
+  .record-date-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; margin: 0 4px 8px; padding: 0; background: none; border: none; font: inherit; font-size: 0.84rem; font-weight: 800; color: var(--text-muted); cursor: pointer; text-align: left; }
+  .record-date-toggle .rec-archive-right { display: flex; align-items: center; flex-shrink: 0; margin-left: 8px; }
+  .record-date-toggle .rec-archive-summary { font-weight: 600; }
+  .record-date-toggle .rec-archive-arrow { font-size: 0.7rem; margin-left: 8px; }
   .record-item { background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
   .record-item .rec-main { display: flex; flex-direction: column; }
   .record-item .rec-time { font-weight: 800; font-size: 1rem; }
@@ -310,8 +314,10 @@
         <div class="field"><textarea id="piyolog-text" rows="6" placeholder="【ぴよログ】2026/7/24(金)&#10;08:30   ミルク 80ml　…"></textarea></div>
         <div class="feed-panel-actions">
           <button class="btn btn-ghost" id="piyolog-cancel">やめる</button>
-          <button class="btn btn-primary" id="piyolog-import">取り込む</button>
+          <button class="btn btn-primary" id="piyolog-import">この端末に取り込む</button>
         </div>
+        <button class="btn btn-secondary btn-block" id="piyolog-publish" style="margin-top:10px">みんなに配信する</button>
+        <p class="field-note" style="margin:8px 0 0">配信すると、はるたんの画面にも同じ記録が届くよ</p>
       </div>
       <div class="card" id="manual-add-form" hidden>
         <div class="field"><label for="manual-date">日付</label><input type="date" id="manual-date"></div>
@@ -375,9 +381,13 @@
         <button class="btn btn-primary btn-block" id="btn-save-settings">保存する</button>
       </div>
       <div class="card">
+        <p class="eyebrow">あいことば</p>
+        <p class="field-note">通知と記録の同期に使うよ。パパから聞いた番号を入れてね</p>
+        <div class="field" style="margin:8px 0 0"><label for="push-secret-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;">あいことば</label><input type="password" id="push-secret-input" autocomplete="off"></div>
+      </div>
+      <div class="card">
         <p class="eyebrow">通知</p>
         <p class="field-note" id="push-status-text">確認中...</p>
-        <div class="field" id="push-secret-field" hidden><label for="push-secret-input">あいことば</label><input type="password" id="push-secret-input" autocomplete="off"><span class="field-note">パパから聞いたあいことばを入れてね。この端末の中にだけ保存されるよ</span></div>
         <button class="btn btn-secondary btn-block" id="btn-toggle-push">通知を設定する</button>
       </div>
       <div class="cta-stack">
@@ -422,6 +432,8 @@
   // 時刻表示や通知を見て、寝ているさくらたんを起こしにいってしまわないように。
   var NEXT_FEED_PREP_MINUTES = 20;
   var RECORD_HISTORY_DAYS = 7;
+  // 8日目〜この日数前までは、日付ごとに折りたたんで表示する(記録一覧が無限に伸びるのを防ぐ上限)。
+  var RECORD_ARCHIVE_DAYS = 30;
   var TIMECHART_HOUR_PX = 48;
   var TIMECHART_LEFT_PAD = 36;
   var TIMECHART_RIGHT_PAD = 70;
@@ -797,7 +809,9 @@
         return l.ml === r.ml && Math.abs(new Date(l.at).getTime() - rTime) <= HISTORY_DEDUPE_MINUTES * 60000;
       });
     }).map(function (r, i) {
-      return { id: "h" + i + "-" + r.at, at: r.at, ml: r.ml, irregular: false };
+      // remote:true は配信データ由来の目印。localStorageに実体が無いため
+      // 一覧では修正・削除ボタンを出さず「共有」バッジで表示する(renderRecordItem参照)。
+      return { id: "h" + i + "-" + r.at, at: r.at, ml: r.ml, irregular: false, remote: true };
     });
     return localLogs.concat(extra);
   }
@@ -1017,18 +1031,33 @@
       .filter(function (l) { return l.at.slice(0, 10) === todayStr; })
       .reduce(function (sum, l) { return sum + l.ml; }, 0);
   }
-  // 記録一覧(編集/削除)は端末のlocalStorage分だけを対象にする。配信データは読み取り専用の
-  // 実測値で、削除・修正ボタンが機能しない項目を一覧に混ぜたくないため、ここではマージしない。
-  function getRecentLogsByDate() {
-    var cutoff = formatDateISO(new Date(Date.now() - (RECORD_HISTORY_DAYS - 1) * 86400000));
+  // 記録一覧は端末のlocalStorage分+配信データをマージして表示する(ホーム画面が既に
+  // マージ済みの実測値で計算しているのに、記録一覧だけ空に見えるのは矛盾するため)。
+  // 配信データ由来の行(log.remote)は削除・修正ボタンが機能しないので、
+  // renderRecordItem側でボタンを出さず「共有」バッジに差し替える。
+  // logsを日付ごとにグルーピングする。minDateInclusive未満は除外し、
+  // maxDateExclusiveを指定した場合はその日付以降(=より新しい日)も除外する。
+  function buildDateGroups(logs, minDateInclusive, maxDateExclusive) {
     var groups = {};
-    state.feedLogs.slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); }).forEach(function (log) {
+    logs.slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); }).forEach(function (log) {
       var d = log.at.slice(0, 10);
-      if (d < cutoff) return;
+      if (d < minDateInclusive) return;
+      if (maxDateExclusive && d >= maxDateExclusive) return;
       if (!groups[d]) groups[d] = [];
       groups[d].push(log);
     });
     return groups;
+  }
+  // 直近7日(展開表示)
+  function getRecentLogsByDate() {
+    var cutoff = formatDateISO(new Date(Date.now() - (RECORD_HISTORY_DAYS - 1) * 86400000));
+    return buildDateGroups(getMergedFeedLogs(), cutoff, null);
+  }
+  // 8日目〜RECORD_ARCHIVE_DAYS日前(折りたたみ表示)。それより古い記録は表示しない。
+  function getArchivedLogsByDate() {
+    var recentCutoff = formatDateISO(new Date(Date.now() - (RECORD_HISTORY_DAYS - 1) * 86400000));
+    var archiveCutoff = formatDateISO(new Date(Date.now() - (RECORD_ARCHIVE_DAYS - 1) * 86400000));
+    return buildDateGroups(getMergedFeedLogs(), archiveCutoff, recentCutoff);
   }
   function addFeedLog(ml, atDate, irregular) {
     var log = { id: "f" + Date.now() + Math.random().toString(16).slice(2, 8), at: toLocalISO(atDate), ml: ml, irregular: !!irregular };
@@ -1081,8 +1110,12 @@
   // 取得の成否が確定したか。成功・失敗どちらでもtrueになる。
   // 「きょうのようす」のように、判断が揺れると不安を与える表示の出し分けに使う。
   var remoteHistoryResolved = false;
-  function fetchRemoteHistory() {
-    fetch(HISTORY_URL)
+  // 配信データ取得の優先順位:
+  // 1. あいことばが保存されていればWorkerの GET /history を試す
+  // 2. 失敗した場合・あいことば未保存の場合は、従来どおり history.json を取得する
+  // 3. どちらも失敗したらlocalStorageのみで通常動作させる(このあと何もしないだけでよい)
+  function fetchHistoryFromFile() {
+    return fetch(HISTORY_URL)
       .then(function (res) {
         if (!res.ok) throw new Error("history.json fetch failed: " + res.status);
         return res.json();
@@ -1093,12 +1126,34 @@
       .catch(function (err) {
         // オフライン・配信データ未設置などでも通常どおり動作させる(localStorageのみで継続)
         console.error("[sakura-milk-navi] 配信データの取得に失敗しました。ローカルの記録のみで続行します。", err);
-      })
-      .then(function () {
-        // 成否が決まってから再計算する。取得は画面の初回表示より後になるため。
-        remoteHistoryResolved = true;
-        rerenderCurrentScreen();
       });
+  }
+  function fetchRemoteHistory() {
+    var afterResolved = function () {
+      // 成否が決まってから再計算する。取得は画面の初回表示より後になるため。
+      remoteHistoryResolved = true;
+      rerenderCurrentScreen();
+    };
+    var secret = getPushSecret();
+    if (secret && isPushConfigured()) {
+      pushFetchGet("/history")
+        .then(function (res) {
+          if (!res.ok) throw new Error("worker history fetch failed: " + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          remoteHistory = data;
+        })
+        .catch(function (err) {
+          // Workerから取れないとき(はるたんの端末にまだあいことばが未入力のときを含む)は
+          // 従来どおりhistory.jsonにフォールバックする。
+          console.error("[sakura-milk-navi] Workerからの配信データ取得に失敗しました。history.jsonにフォールバックします。", err);
+          return fetchHistoryFromFile();
+        })
+        .then(afterResolved);
+    } else {
+      fetchHistoryFromFile().then(afterResolved);
+    }
   }
   function getMergedFeedLogs() {
     return mergeFeedLogs(state.feedLogs, remoteHistory ? remoteHistory.feeds : null);
@@ -1156,6 +1211,13 @@
       body: JSON.stringify(payload)
     });
   }
+  // GET用(配信データの取得): ボディなし、あいことばのヘッダのみ付ける。
+  function pushFetchGet(path) {
+    return fetch(PUSH_SERVER_URL + path, {
+      method: "GET",
+      headers: { "X-Sync-Secret": getPushSecret() }
+    });
+  }
   async function enablePushNotifications() {
     if (!isPushConfigured()) { showToast("通知サーバーの設定がまだ完了していないよ"); return; }
     if (!isPushSupported()) { showToast("この端末・ブラウザは通知に対応していないよ"); return; }
@@ -1178,10 +1240,12 @@
         localStorage.removeItem(PUSH_SECRET_KEY);
         showToast("あいことばが違うみたい。もう一度確認してね");
         renderPushStatus();
+        renderSecretField();
         return;
       }
       if (!res.ok) throw new Error("subscribe failed: " + res.status);
-      if (secretInput) secretInput.value = "";
+      // あいことばは通知専用ではなく記録の同期(配信)にも使う共通の鍵なので、
+      // ここではフィールドをクリアしない(独立したカードに常に保存済みの値を表示し続ける)。
       localStorage.setItem(PUSH_ENABLED_KEY, "1");
       showToast("通知をオンにしたよ");
       renderPushStatus();
@@ -1859,48 +1923,105 @@
   function renderRecords() {
     var listEl = document.getElementById("records-list");
     listEl.innerHTML = "";
-    var groups = getRecentLogsByDate();
-    var dates = Object.keys(groups).sort(function (a, b) { return b.localeCompare(a); });
-    if (dates.length === 0) {
+    var recentGroups = getRecentLogsByDate();
+    var archiveGroups = getArchivedLogsByDate();
+    var recentDates = Object.keys(recentGroups).sort(function (a, b) { return b.localeCompare(a); });
+    var archiveDates = Object.keys(archiveGroups).sort(function (a, b) { return b.localeCompare(a); });
+    if (recentDates.length === 0 && archiveDates.length === 0) {
       var empty = document.createElement("div");
       empty.className = "empty-state";
       empty.textContent = "まだ記録がありません。「＋ 過去の記録を追加」から入力できます。";
       listEl.appendChild(empty);
       return;
     }
-    dates.forEach(function (d) {
-      var group = document.createElement("div");
-      group.className = "record-date-group";
-      var heading = document.createElement("p");
-      heading.className = "record-date-heading";
-      heading.textContent = formatDateLabel(d);
-      group.appendChild(heading);
-      groups[d].forEach(function (log) {
-        group.appendChild(renderRecordItem(log));
-      });
-      listEl.appendChild(group);
+    recentDates.forEach(function (d) {
+      listEl.appendChild(renderExpandedDateGroup(d, recentGroups[d]));
     });
+    archiveDates.forEach(function (d) {
+      listEl.appendChild(renderArchivedDateGroup(d, archiveGroups[d]));
+    });
+  }
+  // 直近7日分: これまでどおり展開した状態で描画する
+  function renderExpandedDateGroup(d, logs) {
+    var group = document.createElement("div");
+    group.className = "record-date-group";
+    var heading = document.createElement("p");
+    heading.className = "record-date-heading";
+    heading.textContent = formatDateLabel(d);
+    group.appendChild(heading);
+    logs.forEach(function (log) {
+      group.appendChild(renderRecordItem(log));
+    });
+    return group;
+  }
+  // 8日目〜30日前の分: 見出しをタップして開閉する折りたたみ表示。
+  // 中身は直近7日分と同じrenderRecordItem()を使うので、修正/削除ボタンや「共有」バッジの
+  // 出しわけは共通のロジックがそのまま適用される。
+  function renderArchivedDateGroup(d, logs) {
+    var group = document.createElement("div");
+    group.className = "record-date-group";
+    var count = logs.length;
+    var total = logs.reduce(function (sum, log) { return sum + log.ml; }, 0);
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "record-date-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    var label = document.createElement("span");
+    label.textContent = formatDateLabel(d);
+    var right = document.createElement("span");
+    right.className = "rec-archive-right";
+    var summary = document.createElement("span");
+    summary.className = "rec-archive-summary";
+    summary.textContent = count + "回・" + total + "ml";
+    var arrow = document.createElement("span");
+    arrow.className = "rec-archive-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "▶";
+    right.appendChild(summary);
+    right.appendChild(arrow);
+    toggle.appendChild(label);
+    toggle.appendChild(right);
+    var body = document.createElement("div");
+    body.className = "record-archive-body";
+    body.hidden = true;
+    logs.forEach(function (log) {
+      body.appendChild(renderRecordItem(log));
+    });
+    toggle.addEventListener("click", function () {
+      var expanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!expanded));
+      body.hidden = expanded;
+      arrow.textContent = expanded ? "▶" : "▼";
+    });
+    group.appendChild(toggle);
+    group.appendChild(body);
+    return group;
   }
   function renderRecordItem(log) {
     var item = document.createElement("div");
     item.className = "record-item";
     var time = log.at.slice(11, 16);
-    var tag = log.irregular ? '<span class="rec-tag">イレギュラー</span>' : "";
+    var tag = (log.irregular ? '<span class="rec-tag">イレギュラー</span>' : "")
+      + (log.remote ? '<span class="rec-tag">共有</span>' : "");
     item.innerHTML =
       '<div class="rec-main"><span class="rec-time">' + time + tag + '</span>' +
       '<span class="rec-ml">' + log.ml + "ml</span></div>";
-    var actions = document.createElement("div");
-    actions.className = "rec-actions";
-    var editBtn = document.createElement("button");
-    editBtn.textContent = "修正";
-    editBtn.addEventListener("click", function () { toggleEditForm(item, log); });
-    var delBtn = document.createElement("button");
-    delBtn.className = "rec-delete";
-    delBtn.textContent = pendingDeleteIds[log.id] ? "本当に削除？" : "削除";
-    delBtn.addEventListener("click", function () { handleDeleteClick(log.id); });
-    actions.appendChild(editBtn);
-    actions.appendChild(delBtn);
-    item.appendChild(actions);
+    // 配信データ由来の行(remote:true)はlocalStorageに実体が無く、修正・削除が機能しないため
+    // ボタンを出さない(バッジだけで区別する)。
+    if (!log.remote) {
+      var actions = document.createElement("div");
+      actions.className = "rec-actions";
+      var editBtn = document.createElement("button");
+      editBtn.textContent = "修正";
+      editBtn.addEventListener("click", function () { toggleEditForm(item, log); });
+      var delBtn = document.createElement("button");
+      delBtn.className = "rec-delete";
+      delBtn.textContent = pendingDeleteIds[log.id] ? "本当に削除？" : "削除";
+      delBtn.addEventListener("click", function () { handleDeleteClick(log.id); });
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      item.appendChild(actions);
+    }
     return item;
   }
   function handleDeleteClick(id) {
@@ -2053,6 +2174,41 @@
     document.getElementById("piyolog-text").value = "";
     document.getElementById("piyolog-form").hidden = true;
     showToast(added > 0 ? added + "件取り込んだよ" : "ぜんぶ取り込み済みだったよ");
+  }
+  // 「みんなに配信する」: ぴよログの生テキストは送らず、端末側でパースした
+  // { updatedAt, feeds, pees, poops, weights } だけをWorkerに送る(日記や便の性状メモなど
+  // 自由記述はparsePiyologTextの時点で取り込まれないため、そもそも送信データに含まれない)。
+  function publishPiyolog() {
+    var secret = getPushSecret();
+    if (!secret) { showToast("配信するには、設定であいことばを入れてね"); return; }
+    var text = document.getElementById("piyolog-text").value;
+    if (!text.trim()) { showToast("ぴよログのテキストを貼り付けてね"); return; }
+    var parsed = parsePiyologText(text, formatDateISO(new Date()));
+    var payload = {
+      updatedAt: new Date().toISOString(),
+      feeds: parsed.feeds,
+      pees: parsed.pees,
+      poops: parsed.poops,
+      weights: parsed.weights
+    };
+    var btn = document.getElementById("piyolog-publish");
+    btn.disabled = true;
+    pushFetch("/history", payload)
+      .then(function (res) {
+        if (res.status === 401) {
+          showToast("配信できなかったよ。あいことばを確認してね");
+          return;
+        }
+        if (!res.ok) throw new Error("history publish failed: " + res.status);
+        showToast(parsed.feeds.length + "件を配信したよ");
+      })
+      .catch(function (err) {
+        console.error("[sakura-milk-navi] 配信に失敗しました", err);
+        showToast("配信できなかったよ。あとでもう一度ためしてね");
+      })
+      .then(function () {
+        btn.disabled = false;
+      });
   }
   // ワンタップ取り込み: ぴよログでコピー済みのテキストをクリップボードから直接読む。
   // 読めない/ミルク行がないときは、これまで通り貼り付けフォームを開く。
@@ -2219,29 +2375,32 @@
     updatePerFeedPreview();
     checkWeightRange();
     renderPushStatus();
+    renderSecretField();
   }
   function renderPushStatus() {
     var statusEl = document.getElementById("push-status-text");
     var btn = document.getElementById("btn-toggle-push");
-    var secretField = document.getElementById("push-secret-field");
     if (!isPushSupported()) {
       statusEl.textContent = "この端末・ブラウザは通知に対応していないよ";
       btn.disabled = true;
       btn.textContent = "通知を設定する";
-      secretField.hidden = true;
       return;
     }
     btn.disabled = false;
     if (isPushEnabled()) {
       statusEl.textContent = "次の授乳が近づいたら通知でお知らせするよ";
       btn.textContent = "通知をオフにする";
-      secretField.hidden = true;
     } else {
       statusEl.textContent = "次の授乳が近づいたら通知で知らせるよ";
       btn.textContent = "通知をオンにする";
-      // あいことばが未保存(または間違っていて取り消された)ときだけ入力欄を出す
-      secretField.hidden = !!getPushSecret();
     }
+  }
+  // あいことば入力欄に保存済みの値を表示する。入力中(フォーカス中)は上書きしない
+  // (配信データの取得完了などで settings 画面を再描画する際に、
+  //  タイプ中の文字を消してしまわないようにするため)。
+  function renderSecretField() {
+    var input = document.getElementById("push-secret-input");
+    if (input && document.activeElement !== input) input.value = getPushSecret();
   }
   function updatePerFeedPreview() {
     var raw = document.getElementById("set-weight").value;
@@ -2389,11 +2548,19 @@
       document.getElementById("piyolog-form").hidden = true;
     });
     document.getElementById("piyolog-import").addEventListener("click", importPiyolog);
+    document.getElementById("piyolog-publish").addEventListener("click", publishPiyolog);
     document.getElementById("manual-cancel").addEventListener("click", closeManualAddForm);
     document.getElementById("manual-save").addEventListener("click", saveManualAdd);
     document.getElementById("btn-goto-evidence").addEventListener("click", function () { showScreen("evidence"); });
     document.getElementById("btn-toggle-push").addEventListener("click", function () {
       if (isPushEnabled()) { disablePushNotifications(); } else { enablePushNotifications(); }
+    });
+    // あいことばカードは通知の有効化に関わらず独立して保存する(記録の配信・取得にも使うため)。
+    // 既存のlocalStorageキー(PUSH_SECRET_KEY)をそのまま使い、新しいキーは作らない。
+    // 空欄への変更では保存しない(誤操作で既存の値を消してしまわないようにするため)。
+    document.getElementById("push-secret-input").addEventListener("change", function (e) {
+      var v = e.target.value.trim();
+      if (v) localStorage.setItem(PUSH_SECRET_KEY, v);
     });
     document.getElementById("set-weight").addEventListener("input", function () { checkWeightRange(); updatePerFeedPreview(); });
     document.getElementById("btn-save-settings").addEventListener("click", saveSettings);
