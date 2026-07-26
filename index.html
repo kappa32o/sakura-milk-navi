@@ -2345,28 +2345,44 @@
   function publishPiyolog() {
     var secret = getPushSecret();
     if (!secret) { showToast("配信するには、設定であいことばを入れてね"); return; }
-    var text = document.getElementById("piyolog-text").value;
-    if (!text.trim()) { showToast("ぴよログのテキストを貼り付けてね"); return; }
-    var parsed = parsePiyologText(text, formatDateISO(new Date()));
-    var payload = {
-      updatedAt: new Date().toISOString(),
-      feeds: parsed.feeds,
-      pees: parsed.pees,
-      poops: parsed.poops,
-      weights: parsed.weights
-    };
     var btn = document.getElementById("piyolog-publish");
     btn.disabled = true;
-    pushFetch("/history", payload)
+    // 貼り付けたテキストだけを送ってはいけない。/historyは全体置き換えなので、
+    // それまでの記録や他の端末が配信したぶんを丸ごと消してしまう。
+    // このボタンは「うまく届かないときの送り直し」なので、いまこの端末が
+    // 持っている記録すべて(配信ぶんとマージ済み)を送る。テキストを取り込みたいときは
+    // 先に「この端末に取り込む」を押してもらう。
+    var sentCount = 0;
+    pushFetchGet("/history")
+      .then(function (res) {
+        if (res.status === 404) { remoteHistory = null; return null; }
+        if (!res.ok) throw new Error("history refetch failed: " + res.status);
+        return res.json().then(function (data) { remoteHistory = data; });
+      })
+      .then(function () {
+        var feeds = getMergedFeedLogs().map(function (l) { return { at: l.at, ml: l.ml }; });
+        sentCount = feeds.length;
+        return pushFetch("/history", {
+          updatedAt: new Date().toISOString(),
+          feeds: feeds,
+          pees: getMergedPees(),
+          poops: getMergedPoops(),
+          weights: getMergedWeightHistory()
+        });
+      })
       .then(function (res) {
         if (res.status === 401) {
           showToast("配信できなかったよ。あいことばを確認してね");
           return;
         }
         if (!res.ok) throw new Error("history publish failed: " + res.status);
-        showToast(parsed.feeds.length + "件を配信したよ");
+        workerHistoryState = "ok";
+        lastSyncAt = new Date();
+        lastSyncFailed = false;
+        showToast(sentCount + "件を配信したよ");
       })
       .catch(function (err) {
+        lastSyncFailed = true;
         console.error("[sakura-milk-navi] 配信に失敗しました", err);
         showToast("配信できなかったよ。あとでもう一度ためしてね");
       })
