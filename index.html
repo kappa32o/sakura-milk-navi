@@ -1625,8 +1625,11 @@
       var nowSuggestion = getSuggestedNowAmount();
       var showsNowAmount = remainMin > 0 && nowSuggestion && nowSuggestion.canGiveNow
         && nowSuggestion.okMl > 0 && nowSuggestion.okMl < nextFeed.ml;
+      // 量だけ出しても「じゃあ何杯つくるの」で止まってしまうので、
+      // 上の「つくる量」と同じスプーンの表記でそろえる。
       setMessageWithLineBreaks(hintEl, showsNowAmount
-        ? "飲む目安は" + nextFeed.ml + "ml。いまあげるなら" + nowSuggestion.okMl + "mlまで"
+        ? "飲む目安は" + nextFeed.ml + "ml。いまなら"
+          + formatPrepPlan(calcPrepPlan(nowSuggestion.okMl), { withVerb: false })
         : "飲む目安は" + nextFeed.ml + "ml。残しても、ぜんぶ飲んでも大丈夫");
       hintEl.hidden = false;
       // 目安の時刻はあくまで「用意をはじめる合図」。起こしてまであげる必要はない。
