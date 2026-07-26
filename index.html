@@ -2650,6 +2650,18 @@
 </script>
 <script>
   if ("serviceWorker" in navigator) {
+    // 新しいService Workerが有効になっても、すでに表示中のHTMLは古いまま。
+    // そのせいで「アプリを2回開き直さないと更新が反映されない」状態になっていたので、
+    // 制御が新しい版に切り替わった時点で自動的に読み込み直す。
+    // 起動直後の数秒で完了するため、入力の途中で消えてしまう心配はない。
+    var hadController = !!navigator.serviceWorker.controller;
+    var reloadingForUpdate = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      // 初回インストール時も発火するが、そのときは中身が最新なのでリロード不要。
+      if (!hadController || reloadingForUpdate) return;
+      reloadingForUpdate = true;
+      window.location.reload();
+    });
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("./sw.js").catch(function (err) {
         console.error("[sakura-milk-navi] Service Worker登録に失敗しました", err);

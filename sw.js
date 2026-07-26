@@ -1,5 +1,5 @@
 "use strict";
-var CACHE_NAME = "sakura-milk-navi-v21";
+var CACHE_NAME = "sakura-milk-navi-v23";
 var PRECACHE_URLS = [
   "./",
   "./index.html",
