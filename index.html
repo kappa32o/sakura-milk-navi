@@ -1362,7 +1362,11 @@
     }
   }
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible") schedulePushSync();
+    if (document.visibilityState !== "visible") return;
+    schedulePushSync();
+    // 配信データも取り直す。受け取るのが起動時だけだと、アプリを閉じずに
+    // ホームに戻っていた端末が、パパの配信したぶんを取りこぼしてしまうため。
+    fetchRemoteHistory();
   });
   /* ---------- トースト ---------- */
   var toastTimer = null;
@@ -2573,7 +2577,12 @@
     // 空欄への変更では保存しない(誤操作で既存の値を消してしまわないようにするため)。
     document.getElementById("push-secret-input").addEventListener("change", function (e) {
       var v = e.target.value.trim();
-      if (v) localStorage.setItem(PUSH_SECRET_KEY, v);
+      if (!v) return;
+      localStorage.setItem(PUSH_SECRET_KEY, v);
+      // あいことばが入るまではWorkerに問い合わせていないので、ここで取り直す。
+      // これをしないとworkerHistoryStateが"unknown"のままになり、
+      // 記録を取り込んでも自動配信が始まらない(手動配信でしか送れない)。
+      fetchRemoteHistory();
     });
     showScreen("home");
     // 配信データ(history.json)は起動後に取得し、取れたら画面を再計算する。
