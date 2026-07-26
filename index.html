@@ -133,7 +133,6 @@
   }
   .field input[type="range"] { width: 100%; accent-color: var(--primary); }
   .field-note { font-weight: 500; color: var(--text-muted); font-size: 0.78rem; }
-  .field-warn { margin: -8px 0 12px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-text); font-size: 0.8rem; font-weight: 700; }
   .msg-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .msg-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; }
   .msg-item p { margin: 0; font-size: 0.9rem; line-height: 1.45; }
@@ -310,14 +309,14 @@
         <button class="btn btn-secondary btn-block" id="btn-open-piyolog">📋 ぴよログでコピーして、ここをタップで取り込み</button>
       </div>
       <div class="card" id="piyolog-form" hidden>
-        <p class="field-note" style="margin-bottom:8px">ぴよログの「メニュー → 記録の出力 → データのエクスポート」で1日分をコピーしてね。コピーできていれば上のボタンだけで取り込めるよ。うまくいかないときは、ここに貼り付けて「取り込む」を押してね。ミルクの行だけ自動で取り込むよ</p>
+        <p class="field-note" style="margin-bottom:8px">ぴよログの「メニュー → 記録の出力 → データのエクスポート」でコピーしてね。コピーできていれば上のボタンだけで取り込めるよ。うまくいかないときは、ここに貼り付けてね。ミルク・おしっこ・うんち・体重を、何日分でもまとめて取り込めるよ</p>
         <div class="field"><textarea id="piyolog-text" rows="6" placeholder="【ぴよログ】2026/7/24(金)&#10;08:30   ミルク 80ml　…"></textarea></div>
         <div class="feed-panel-actions">
           <button class="btn btn-ghost" id="piyolog-cancel">やめる</button>
           <button class="btn btn-primary" id="piyolog-import">この端末に取り込む</button>
         </div>
         <button class="btn btn-secondary btn-block" id="piyolog-publish" style="margin-top:10px">みんなに配信する</button>
-        <p class="field-note" style="margin:8px 0 0">配信すると、はるたんの画面にも同じ記録が届くよ</p>
+        <p class="field-note" style="margin:8px 0 0">うまく届かないときは、このボタンで送り直せるよ</p>
       </div>
       <div class="card" id="manual-add-form" hidden>
         <div class="field"><label for="manual-date">日付</label><input type="date" id="manual-date"></div>
@@ -374,11 +373,9 @@
     <section id="screen-settings" class="screen" hidden>
       <h2 class="screen-title">設定</h2>
       <div class="card">
-        <div class="field"><label for="set-birthdate">さくらたんの誕生日</label><input type="date" id="set-birthdate"></div>
-        <div class="field"><label for="set-weight">体重 (g)</label><input type="number" id="set-weight" step="10"><span class="field-note">入力した日から先は、標準の増えかた（1日約30g）で今日の体重を自動で推定するよ。未入力のときは時期ごとの標準体重で計算するよ</span></div>
-        <p class="field-warn" id="weight-warn" hidden></p>
-        <p class="field-note" id="perfeed-preview">1回の目安量: --ml</p>
-        <button class="btn btn-primary btn-block" id="btn-save-settings">保存する</button>
+        <p class="eyebrow">さくらたんのこと</p>
+        <p class="body-text" id="baby-info-age"></p>
+        <p class="body-text" id="baby-info-weight"></p>
       </div>
       <div class="card">
         <p class="eyebrow">あいことば</p>
@@ -641,14 +638,6 @@
   function calcPerFeedMlFromRow(weightGrams, row, ageDays) {
     return clamp(calcPerFeedRawMl(weightGrams, row, ageDays), row.minMl, row.maxMl);
   }
-  // クランプ発生時に添える説明文。クランプがなければ空文字。
-  function buildClampNote(row, rawMl, perFeedMl) {
-    if (rawMl === perFeedMl) return "";
-    if (rawMl > perFeedMl) {
-      return "体重からは" + rawMl + "mlだけど、" + row.label + "のレンジ上限でおさえてるよ";
-    }
-    return "体重からは" + rawMl + "mlだけど、" + row.label + "のレンジ下限でおさえてるよ";
-  }
   // 今あげてOKな量。
   // ・前回から60分未満: ミルクは避ける表示にする(avoidMilk)。消化がまだ途中のため。
   // ・60分以降: 経過時間に比例した量(=胃の空きぶん。ミルクの胃排出実測とほぼ一致する近似)。
@@ -810,7 +799,7 @@
       });
     }).map(function (r, i) {
       // remote:true は配信データ由来の目印。localStorageに実体が無いため
-      // 一覧では修正・削除ボタンを出さず「共有」バッジで表示する(renderRecordItem参照)。
+      // 一覧では修正・削除ボタンを出さず「受信」バッジで表示する(renderRecordItem参照)。
       return { id: "h" + i + "-" + r.at, at: r.at, ml: r.ml, irregular: false, remote: true };
     });
     return localLogs.concat(extra);
@@ -839,6 +828,11 @@
   function formatTime(date) { return pad2(date.getHours()) + ":" + pad2(date.getMinutes()); }
   function formatDateISO(date) { return date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate()); }
   function toLocalISO(date) { return formatDateISO(date) + "T" + pad2(date.getHours()) + ":" + pad2(date.getMinutes()); }
+  // "YYYY-MM-DD" を「YYYY年M月D日」表記にする(設定画面の「さくらたんのこと」表示用)
+  function formatJapaneseDate(dateStr) {
+    var parts = dateStr.split("-");
+    return parts[0] + "年" + parseInt(parts[1], 10) + "月" + parseInt(parts[2], 10) + "日";
+  }
   function formatDurationMinutes(totalMinutes) {
     var m = Math.max(0, Math.round(totalMinutes));
     var h = Math.floor(m / 60);
@@ -1034,7 +1028,7 @@
   // 記録一覧は端末のlocalStorage分+配信データをマージして表示する(ホーム画面が既に
   // マージ済みの実測値で計算しているのに、記録一覧だけ空に見えるのは矛盾するため)。
   // 配信データ由来の行(log.remote)は削除・修正ボタンが機能しないので、
-  // renderRecordItem側でボタンを出さず「共有」バッジに差し替える。
+  // renderRecordItem側でボタンを出さず「受信」バッジに差し替える。
   // logsを日付ごとにグルーピングする。minDateInclusive未満は除外し、
   // maxDateExclusiveを指定した場合はその日付以降(=より新しい日)も除外する。
   function buildDateGroups(logs, minDateInclusive, maxDateExclusive) {
@@ -1063,16 +1057,19 @@
     var log = { id: "f" + Date.now() + Math.random().toString(16).slice(2, 8), at: toLocalISO(atDate), ml: ml, irregular: !!irregular };
     state = Object.assign({}, state, { feedLogs: state.feedLogs.concat([log]) });
     saveState();
+    scheduleAutoPublishHistory();
   }
   function deleteFeedLog(id) {
     state = Object.assign({}, state, { feedLogs: state.feedLogs.filter(function (l) { return l.id !== id; }) });
     saveState();
+    scheduleAutoPublishHistory();
   }
   function updateFeedLog(id, changes) {
     state = Object.assign({}, state, {
       feedLogs: state.feedLogs.map(function (l) { return l.id === id ? Object.assign({}, l, changes) : l; })
     });
     saveState();
+    scheduleAutoPublishHistory();
   }
   // おしっこ/うんちの記録を追加する。既存の重複排除ロジック(5分以内は同一とみなす)を維持する。
   // ミルクの記録に添える「おまけ」の入力なので確認ダイアログは出さず、失敗しても静かに無視する。
@@ -1084,6 +1081,7 @@
     if (newTimes.length === 0) return;
     state = Object.assign({}, state, { pees: state.pees.concat(newTimes) });
     saveState();
+    scheduleAutoPublishHistory();
   }
   function addPoopLogs(times) {
     if (!times || times.length === 0) return;
@@ -1093,6 +1091,7 @@
     if (newTimes.length === 0) return;
     state = Object.assign({}, state, { poops: state.poops.concat(newTimes) });
     saveState();
+    scheduleAutoPublishHistory();
   }
   // 同じ日付の体重が既にあれば置き換える(ぴよログは同日複数回計測でも最後の値を採用するため)
   function addWeightEntries(entries) {
@@ -1102,6 +1101,7 @@
     }).concat(entries);
     state = Object.assign({}, state, { weightHistory: merged });
     saveState();
+    scheduleAutoPublishHistory();
   }
   /* ---------- 配信データ(history.json)の取得とマージ済みアクセサ ---------- */
   // 配信データはメモリ上でのみ保持し、localStorageには永続化しない
@@ -1110,6 +1110,12 @@
   // 取得の成否が確定したか。成功・失敗どちらでもtrueになる。
   // 「きょうのようす」のように、判断が揺れると不安を与える表示の出し分けに使う。
   var remoteHistoryResolved = false;
+  // Worker上の配信データ取得結果。自動配信してよいか(scheduleAutoPublishHistory参照)の判定に使う。
+  // "unknown" = まだ確定していない(未試行、またはあいことば未設定でそもそも試みない)
+  // "ok"      = Workerからの取得に成功した(remoteHistoryはWorker由来の最新値)
+  // "empty"   = Workerが404(=まだ何も配信されていないと確定できた)
+  // "failed"  = 通信エラー等でWorker側の状態が確定できなかった(自動配信は禁止)
+  var workerHistoryState = "unknown";
   // 配信データ取得の優先順位:
   // 1. あいことばが保存されていればWorkerの GET /history を試す
   // 2. 失敗した場合・あいことば未保存の場合は、従来どおり history.json を取得する
@@ -1138,15 +1144,23 @@
     if (secret && isPushConfigured()) {
       pushFetchGet("/history")
         .then(function (res) {
+          if (res.status === 404) {
+            // まだ誰も配信していない、と確定できた状態。自動配信は許可してよい。
+            workerHistoryState = "empty";
+            return fetchHistoryFromFile();
+          }
           if (!res.ok) throw new Error("worker history fetch failed: " + res.status);
-          return res.json();
-        })
-        .then(function (data) {
-          remoteHistory = data;
+          return res.json().then(function (data) {
+            remoteHistory = data;
+            workerHistoryState = "ok";
+          });
         })
         .catch(function (err) {
-          // Workerから取れないとき(はるたんの端末にまだあいことばが未入力のときを含む)は
-          // 従来どおりhistory.jsonにフォールバックする。
+          // 通信エラー等でWorker側の状態(最新の配信データ)が確定できなかった。
+          // 表示はこれまでどおりhistory.jsonにフォールバックするが、
+          // この状態のまま自動配信すると他端末の配信済みデータを消しかねないため禁止する
+          // (canAutoPublishHistory参照)。
+          workerHistoryState = "failed";
           console.error("[sakura-milk-navi] Workerからの配信データ取得に失敗しました。history.jsonにフォールバックします。", err);
           return fetchHistoryFromFile();
         })
@@ -1173,6 +1187,47 @@
   }
   function getDaysSincePoop() {
     return calcDaysSincePoop(getMergedPoops(), new Date());
+  }
+  /* ---------- 記録の自動配信 ---------- */
+  // 記録を追加・修正・削除するたびに、マージ済みの全データをWorkerへ配信する。
+  // /historyはKVを全体置き換えする設計なので、ローカル分だけを送ると
+  // 他端末が配信済みのデータ(いまは161件)を消してしまう。そのため必ずgetMerged*()の結果を使う。
+  var AUTO_PUBLISH_DEBOUNCE_MS = 2000;
+  var autoPublishTimer = null;
+  // 自動配信してよいか: あいことば保存済み かつ Worker側の状態が確定している(成功 or 404未登録)ときだけ。
+  // 通信失敗で状態未確定のまま送ると、他端末が既に配信済みのデータを消しかねないため禁止する。
+  function canAutoPublishHistory() {
+    var secret = getPushSecret();
+    if (!secret || !isPushConfigured()) return false;
+    return workerHistoryState === "ok" || workerHistoryState === "empty";
+  }
+  // 記録の変更操作(追加・修正・削除・ぴよログ取り込み)のたびに呼ぶ。
+  // デバウンスすることで、ぴよログの一括取り込みなど複数回連続して呼ばれても送信は1回にまとまる。
+  function scheduleAutoPublishHistory() {
+    if (!canAutoPublishHistory()) return;
+    clearTimeout(autoPublishTimer);
+    autoPublishTimer = setTimeout(autoPublishHistory, AUTO_PUBLISH_DEBOUNCE_MS);
+  }
+  function autoPublishHistory() {
+    if (!canAutoPublishHistory()) return; // 待機中に状態が変わっている可能性があるため再確認する
+    var payload = {
+      updatedAt: new Date().toISOString(),
+      feeds: getMergedFeedLogs().map(function (l) { return { at: l.at, ml: l.ml }; }),
+      pees: getMergedPees(),
+      poops: getMergedPoops(),
+      weights: getMergedWeightHistory()
+    };
+    pushFetch("/history", payload)
+      .then(function (res) {
+        if (!res.ok) throw new Error("auto publish failed: " + res.status);
+        // 送った内容がWorker上の最新状態になったので、以後の自動配信可否判定にも反映する
+        workerHistoryState = "ok";
+      })
+      .catch(function (err) {
+        // ローカルへの保存は既に成功しているので、はるたんを不安にさせないよう
+        // トーストは出さずログに留める(手動の「みんなに配信する」でリカバリできる)。
+        console.error("[sakura-milk-navi] 記録の自動配信に失敗しました(ローカルの記録は保存済みです)", err);
+      });
   }
   /* ---------- プッシュ通知 ---------- */
   // ワーカーをデプロイしたら worker/README の手順に沿って下の2つを実際の値に書き換えてね。
@@ -1955,7 +2010,7 @@
     return group;
   }
   // 8日目〜30日前の分: 見出しをタップして開閉する折りたたみ表示。
-  // 中身は直近7日分と同じrenderRecordItem()を使うので、修正/削除ボタンや「共有」バッジの
+  // 中身は直近7日分と同じrenderRecordItem()を使うので、修正/削除ボタンや「受信」バッジの
   // 出しわけは共通のロジックがそのまま適用される。
   function renderArchivedDateGroup(d, logs) {
     var group = document.createElement("div");
@@ -2002,7 +2057,7 @@
     item.className = "record-item";
     var time = log.at.slice(11, 16);
     var tag = (log.irregular ? '<span class="rec-tag">イレギュラー</span>' : "")
-      + (log.remote ? '<span class="rec-tag">共有</span>' : "");
+      + (log.remote ? '<span class="rec-tag">受信</span>' : "");
     item.innerHTML =
       '<div class="rec-main"><span class="rec-time">' + time + tag + '</span>' +
       '<span class="rec-ml">' + log.ml + "ml</span></div>";
@@ -2366,16 +2421,29 @@
   }
   /* ---------- 設定画面 ---------- */
   function renderSettings() {
-    var s = state.settings;
-    document.getElementById("set-birthdate").value = s.birthDate || "";
-    // 入力欄に出すのは端末で入力した値だけ。配信データの体重をここに書き戻すと、
-    // 保存操作のたびに配信分が端末側の履歴として二重に増えてしまうため。
-    var inputWeight = (typeof s.weightGrams === "number" && s.weightGrams > 0) ? s.weightGrams : "";
-    document.getElementById("set-weight").value = inputWeight;
-    updatePerFeedPreview();
-    checkWeightRange();
+    renderBabyInfoCard();
     renderPushStatus();
     renderSecretField();
+  }
+  // 「さくらたんのこと」カード: 誕生日・生後日数・体重は読み取り専用の表示のみ。
+  // 誕生日はstate.settings.birthDate(初期値2026-07-09)、体重は配信データ込みの実測値
+  // (getLatestWeightEntry、ぴよログの取り込み・配信データ由来のものを含む)をそのまま使う。
+  function renderBabyInfoCard() {
+    var ageEl = document.getElementById("baby-info-age");
+    var weightEl = document.getElementById("baby-info-weight");
+    var birthDate = state.settings.birthDate;
+    var days = getAgeDays();
+    ageEl.textContent = (birthDate && days !== null)
+      ? "生後" + days + "日（" + formatJapaneseDate(birthDate) + "うまれ）"
+      : "";
+    var entry = getLatestWeightEntry();
+    if (entry && entry.date) {
+      var kg = (entry.grams / 1000).toFixed(1);
+      var measuredDate = new Date(entry.date + "T00:00:00");
+      weightEl.textContent = "体重 " + kg + "kg（" + (measuredDate.getMonth() + 1) + "月" + measuredDate.getDate() + "日にはかったよ）";
+    } else {
+      weightEl.textContent = "体重はまだ記録がないよ。ぴよログを取り込むと入るよ";
+    }
   }
   function renderPushStatus() {
     var statusEl = document.getElementById("push-status-text");
@@ -2401,61 +2469,6 @@
   function renderSecretField() {
     var input = document.getElementById("push-secret-input");
     if (input && document.activeElement !== input) input.value = getPushSecret();
-  }
-  function updatePerFeedPreview() {
-    var raw = document.getElementById("set-weight").value;
-    var el = document.getElementById("perfeed-preview");
-    var row = getAgeRow();
-    if (!row) { el.textContent = "誕生日を入れると目安が出るよ"; return; }
-    var weight = raw !== "" ? (parseInt(raw, 10) || 0) : row.stdMid;
-    var ageDays = getAgeDays();
-    var rawMl = calcPerFeedRawMl(weight, row, ageDays);
-    var standardPerFeed = clamp(rawMl, row.minMl, row.maxMl);
-    // 入力中の体重でのプレビューなので、レンジも1日量もその場で計算し直す
-    var info = getCycleInfo();
-    var range = calcDailyTargetRange(weight, row, ageDays);
-    var dailyTotal = calcDailyTotalForFeeds(range, standardPerFeed, info.feedsPerDay);
-    var perFeed = calcPerFeedForFeeds(dailyTotal, standardPerFeed, info.feedsPerDay, info.standardFeedsPerDay, row.maxMl);
-    var clampNote = buildClampNote(row, rawMl, standardPerFeed);
-    el.textContent = "1回の目安量: " + perFeed + "ml（" + formatDurationMinutes(info.cycleMinutes) + "おき・1日" + info.feedsPerDay + "回"
-      + (clampNote ? "／" + clampNote : "") + "）";
-  }
-  function checkWeightRange() {
-    var raw = document.getElementById("set-weight").value;
-    var warnEl = document.getElementById("weight-warn");
-    if (raw === "") { warnEl.hidden = true; return; }
-    var weight = parseInt(raw, 10) || 0;
-    var row = getAgeRow();
-    if (row && (weight < row.stdMin || weight > row.stdMax)) {
-      warnEl.hidden = false;
-      warnEl.textContent = row.label + "の標準体重はだいたい" + (row.stdMin / 1000).toFixed(1) + "〜" + (row.stdMax / 1000).toFixed(1) + "kgだよ。ちがっていても個性の範囲のことが多いけど、健診で相談していると安心だね";
-    } else {
-      warnEl.hidden = true;
-    }
-  }
-  function saveSettings() {
-    var weightRaw = document.getElementById("set-weight").value;
-    var birthDate = document.getElementById("set-birthdate").value;
-    var weightGrams = null;
-    if (weightRaw !== "") {
-      weightGrams = parseInt(weightRaw, 10);
-      if (isNaN(weightGrams) || weightGrams <= 0) {
-        showToast("体重を確認してね");
-        return;
-      }
-    }
-    var prevWeight = state.settings.weightGrams;
-    state = Object.assign({}, state, {
-      settings: Object.assign({}, state.settings, { birthDate: birthDate, weightGrams: weightGrams })
-    });
-    if (weightGrams && weightGrams !== prevWeight) {
-      state = Object.assign({}, state, {
-        weightHistory: state.weightHistory.concat([{ date: formatDateISO(new Date()), grams: weightGrams }])
-      });
-    }
-    saveState();
-    showToast("設定を保存したよ");
-    renderSettings();
   }
   /* ---------- 初期化 ---------- */
   function init() {
@@ -2562,8 +2575,6 @@
       var v = e.target.value.trim();
       if (v) localStorage.setItem(PUSH_SECRET_KEY, v);
     });
-    document.getElementById("set-weight").addEventListener("input", function () { checkWeightRange(); updatePerFeedPreview(); });
-    document.getElementById("btn-save-settings").addEventListener("click", saveSettings);
     showScreen("home");
     // 配信データ(history.json)は起動後に取得し、取れたら画面を再計算する。
     // 取得できなくてもlocalStorageだけで通常どおり動作させたいので、ここではawaitしない。
