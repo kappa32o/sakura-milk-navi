@@ -653,7 +653,11 @@
     }
     var safeElapsed = Math.max(0, elapsedMinutes);
     if (safeElapsed < MIN_MILK_INTERVAL_MINUTES) {
-      return { canGiveNow: false, avoidMilk: true, okMl: 0, isAdvance: false };
+      // ミルク以外を先に勧めるが、量をまったく示さないと「じゃあ何mlあげればいいの」で
+      // 詰まってしまう。どうしてもあげるとき用に、経過時間ぶんの少量だけ目安を返す
+      // (前借りはしない。ここで多めに出すと吐き戻しのリスクが上がるため)。
+      var smallMl = clamp(roundToUnit(perFeedMl * (safeElapsed / cycleMinutes)), 0, perFeedMl);
+      return { canGiveNow: false, avoidMilk: true, okMl: 0, smallMl: smallMl, isAdvance: false };
     }
     var rawMl = perFeedMl * (safeElapsed / cycleMinutes);
     var roundedMl = clamp(roundToUnit(rawMl), 0, perFeedMl);
@@ -1895,13 +1899,27 @@
         }
         irregularResult = result;
         if (result.avoidMilk) {
+          // 泣いている最中に長文は読めない。「まず何をするか」を短く出し、
+          // 「じゃあ何mlあげればいいの」で詰まらないよう量の目安も添える。
           var waitMinutes = Math.max(1, Math.ceil(MIN_MILK_INTERVAL_MINUTES - elapsedMinutes));
+          var smallMl = roundToUnit(Math.min(result.smallMl || 0, remainingBudget));
           answerEl.innerHTML =
-            '<p class="eyebrow">🕐 いまはミルク以外がおすすめ</p>' +
-            '<p class="wait-text">前回から' + formatDurationMinutes(elapsedMinutes) + '。ミルクは消化に時間がかかるから（母乳の約2倍）、60分たつまではできればミルクは避けたい時間だよ。おしゃぶり・抱っこ・げっぷの確認・おむつチェックをためしてみてね。あと' + formatDurationMinutes(waitMinutes) + 'でミルクの案内が出せるよ。どうしてもあげたときは記録タブから入れてね</p>';
-          giveBtn.disabled = true;
-          giveBtn.textContent = "🍼 あげた";
-          irregularResult = null;
+            '<p class="eyebrow">🕐 まずはミルク以外をためしてみて</p>' +
+            '<p class="wait-text">おしゃぶり・抱っこ・げっぷ・おむつ。前回から' + formatDurationMinutes(elapsedMinutes) + 'だから、あと' + formatDurationMinutes(waitMinutes) + 'でいつもの量を案内できるよ</p>' +
+            (smallMl > 0
+              ? '<p class="subline-prep">どうしてもあげるなら ' + smallMl + 'ml まで</p>'
+              : '');
+          // 少量でも記録できるようにしておく。ボタンを塞ぐと記録タブへ回ることになり、
+          // 泣いている場面では現実的でないため(記録漏れは周期の学習も狂わせる)。
+          if (smallMl > 0) {
+            irregularResult = { canGiveNow: true, avoidMilk: true, okMl: smallMl, isAdvance: false };
+            giveBtn.disabled = false;
+            giveBtn.textContent = "🍼 " + smallMl + "ml あげた";
+          } else {
+            irregularResult = null;
+            giveBtn.disabled = true;
+            giveBtn.textContent = "🍼 あげた";
+          }
         } else if (result.canGiveNow) {
           // 前借り後を想定した仮のlastLogでcalcNextFeedを計算し、記録後の実際の次回表示と一致させる。
           var hypotheticalLog = { at: toLocalISO(now), ml: result.okMl, irregular: true };
