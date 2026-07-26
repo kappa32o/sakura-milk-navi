@@ -414,6 +414,9 @@
   var MIN_MILK_INTERVAL_MINUTES = 60;
   // 前借りの下限は1回量の半分。さくらたんはよく飲むので固定40mlより多めに設定。
   var ADVANCE_FLOOR_RATIO = 0.5;
+  // 目安の8割を飲めば「満足するまで飲んだ」とみなし、次の授乳を早めない(calcNextFeed参照)。
+  // 毎回ぴったり飲みきることはないので、少し残しただけで前倒しにすると予定がずれ続ける。
+  var FULL_ENOUGH_RATIO = 0.8;
   // 実測周期の学習パラメータ。月齢テーブルの回数はあくまで一般的な目安で、
   // 赤ちゃんごとの実際のペースとはずれる（さくらたんは標準3.5時間に対し実測2〜3時間）。
   // ずれたまま「次のミルク」を出すと毎回外れるので、記録がたまったら実測を優先する。
@@ -683,8 +686,12 @@
       return { time: now, ml: roundToUnit(Math.min(perFeedMl, remainingMl)) };
     }
     var cycleMinutes = resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, new Date(lastLog.at).getHours());
+    // 飲んだ量が少ないときだけ次を早める。ただし目安ぴったりに飲みきることは少なく、
+    // 少し残しただけで比例して早めると予定がじりじり前倒しになってしまうため、
+    // 8割以上飲んでいれば「満足するまで飲んだ」とみなして周期は縮めない。
     // 下限0.5 = 少量しか飲まなくても最低半周期はあける（ミルクの胃排出半減期約78分に整合）
-    var ratio = clamp(lastLog.ml / perFeedMl, 0.5, 1);
+    var drankRatio = perFeedMl > 0 ? lastLog.ml / perFeedMl : 1;
+    var ratio = drankRatio >= FULL_ENOUGH_RATIO ? 1 : clamp(drankRatio, 0.5, 1);
     var time = new Date(new Date(lastLog.at).getTime() + cycleMinutes * ratio * 60000);
     var ml = roundToUnit(Math.min(perFeedMl, remainingMl));
     return { time: time, ml: ml };
