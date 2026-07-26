@@ -394,6 +394,7 @@
       </div>
       <div class="cta-stack">
         <button class="btn btn-ghost btn-block" id="btn-goto-evidence">💡 どうしてこの量なの？を見る</button>
+        <p class="field-note" id="app-version-text" style="text-align:center;margin-top:14px" hidden></p>
       </div>
     </section>
   </main>
@@ -884,7 +885,8 @@
       weightHistory: [],
       feedLogs: [],
       pees: [],
-      poops: []
+      poops: [],
+      deletedFeeds: []
     };
   }
   function loadState() {
@@ -912,7 +914,8 @@
         feedLogs: Array.isArray(parsed.feedLogs) ? parsed.feedLogs : [],
         // 既存端末にはまだ無いフィールドなので、無ければ空配列にフォールバックする
         pees: Array.isArray(parsed.pees) ? parsed.pees : [],
-        poops: Array.isArray(parsed.poops) ? parsed.poops : []
+        poops: Array.isArray(parsed.poops) ? parsed.poops : [],
+        deletedFeeds: Array.isArray(parsed.deletedFeeds) ? parsed.deletedFeeds : []
       };
     } catch (err) {
       console.error("[sakura-milk-navi] 状態の読み込みに失敗しました。初期状態を使用します。", err);
@@ -1094,14 +1097,34 @@
     var archiveCutoff = formatDateISO(new Date(Date.now() - (RECORD_ARCHIVE_DAYS - 1) * 86400000));
     return buildDateGroups(getMergedFeedLogs(), archiveCutoff, recentCutoff);
   }
+  // 記録が「同じもの」かの判定。マージの重複判定とそろえる(時刻5分以内かつ同じ量)。
+  function isSameFeedEntry(a, b) {
+    return a.ml === b.ml
+      && Math.abs(new Date(a.at).getTime() - new Date(b.at).getTime()) <= HISTORY_DEDUPE_MINUTES * 60000;
+  }
   function addFeedLog(ml, atDate, irregular) {
     var log = { id: "f" + Date.now() + Math.random().toString(16).slice(2, 8), at: toLocalISO(atDate), ml: ml, irregular: !!irregular };
-    state = Object.assign({}, state, { feedLogs: state.feedLogs.concat([log]) });
+    state = Object.assign({}, state, {
+      feedLogs: state.feedLogs.concat([log]),
+      // 同じ時刻・量の削除記録が残っていると、いま足したものが消されてしまうので取り除く
+      deletedFeeds: (state.deletedFeeds || []).filter(function (d) { return !isSameFeedEntry(d, log); })
+    });
     saveState();
     scheduleAutoPublishHistory();
   }
   function deleteFeedLog(id) {
-    state = Object.assign({}, state, { feedLogs: state.feedLogs.filter(function (l) { return l.id !== id; }) });
+    var target = null;
+    state.feedLogs.forEach(function (l) { if (l.id === id) target = l; });
+    // 「消した」という事実を残す。これがないと、配信データを取得し直したときや
+    // 他の端末とマージしたときに、消したはずの記録が復活してしまう。
+    var deleted = (state.deletedFeeds || []).slice();
+    if (target && !deleted.some(function (d) { return isSameFeedEntry(d, target); })) {
+      deleted.push({ at: target.at, ml: target.ml });
+    }
+    state = Object.assign({}, state, {
+      feedLogs: state.feedLogs.filter(function (l) { return l.id !== id; }),
+      deletedFeeds: deleted
+    });
     saveState();
     scheduleAutoPublishHistory();
   }
@@ -1180,6 +1203,8 @@
       // 成否が決まってから再計算する。取得は画面の初回表示より後になるため。
       remoteHistoryResolved = true;
       rerenderCurrentScreen();
+      // 前回オフラインなどで送れなかったぶんがあれば、このタイミングで送り直す。
+      retryPendingPublish();
     };
     var secret = getPushSecret();
     if (secret && isPushConfigured()) {
@@ -1210,8 +1235,24 @@
       fetchHistoryFromFile().then(afterResolved);
     }
   }
+  // 端末の削除記録と、配信データに含まれる削除記録を合わせたもの。
+  function getMergedDeletedFeeds() {
+    var merged = (state.deletedFeeds || []).slice();
+    var remote = (remoteHistory && remoteHistory.deleted) || [];
+    remote.forEach(function (r) {
+      if (!r || typeof r.at !== "string") return;
+      if (!merged.some(function (d) { return isSameFeedEntry(d, r); })) merged.push(r);
+    });
+    return merged;
+  }
   function getMergedFeedLogs() {
-    return mergeFeedLogs(state.feedLogs, remoteHistory ? remoteHistory.feeds : null);
+    var merged = mergeFeedLogs(state.feedLogs, remoteHistory ? remoteHistory.feeds : null);
+    var deleted = getMergedDeletedFeeds();
+    if (deleted.length === 0) return merged;
+    // 消した記録は、配信データ側にまだ残っていても表示・配信の対象から外す
+    return merged.filter(function (l) {
+      return !deleted.some(function (d) { return isSameFeedEntry(l, d); });
+    });
   }
   function getMergedPees() {
     return mergeTimeEvents(state.pees, remoteHistory ? remoteHistory.pees : null);
@@ -1235,6 +1276,38 @@
   // 他端末が配信済みのデータ(いまは161件)を消してしまう。そのため必ずgetMerged*()の結果を使う。
   var AUTO_PUBLISH_DEBOUNCE_MS = 2000;
   var autoPublishTimer = null;
+  // 配信するのは直近90日ぶん。Worker側は各配列5000件までで、それを超えると
+  // 配信がまるごと失敗するようになる(1日20件なら8ヶ月で到達する)。
+  // 記録タブの表示は30日、成長のあしあての比較も2週間前なので実用上こまらない。
+  // 体重だけは件数が少ない(月に数回)ので全部送る。
+  var HISTORY_PUBLISH_DAYS = 90;
+  // 配信すべき変更が残っているか。オフラインで記録した場合など、送信に失敗しても
+  // 次の起動や画面復帰で送り直せるようにフラグを端末に残しておく。
+  var PENDING_PUBLISH_KEY = "sakura-milk-navi-pending-publish";
+  function hasPendingPublish() { return localStorage.getItem(PENDING_PUBLISH_KEY) === "1"; }
+  function setPendingPublish(pending) {
+    try {
+      if (pending) localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+      else localStorage.removeItem(PENDING_PUBLISH_KEY);
+    } catch (err) { /* 容量超過などで書けなくても配信自体は続行する */ }
+  }
+  // 配信データの組み立て。自動配信と手動の「みんなに配信する」で必ず同じ内容を送る。
+  function buildHistoryPayload() {
+    var cutoff = formatDateISO(new Date(Date.now() - HISTORY_PUBLISH_DAYS * 86400000));
+    var withinRange = function (at) { return at.slice(0, 10) >= cutoff; };
+    return {
+      updatedAt: new Date().toISOString(),
+      feeds: getMergedFeedLogs()
+        .filter(function (l) { return withinRange(l.at); })
+        .map(function (l) { return { at: l.at, ml: l.ml }; }),
+      pees: getMergedPees().filter(withinRange),
+      poops: getMergedPoops().filter(withinRange),
+      weights: getMergedWeightHistory(),
+      // 消した記録は「消したという事実」も配信する。これがないと、他の端末や
+      // 取得し直した配信データとマージされたときに復活してしまう。
+      deleted: getMergedDeletedFeeds().filter(function (d) { return withinRange(d.at); })
+    };
+  }
   // 自動配信してよいか: あいことば保存済み かつ Worker側の状態が確定している(成功 or 404未登録)ときだけ。
   // 通信失敗で状態未確定のまま送ると、他端末が既に配信済みのデータを消しかねないため禁止する。
   function canAutoPublishHistory() {
@@ -1245,6 +1318,16 @@
   // 記録の変更操作(追加・修正・削除・ぴよログ取り込み)のたびに呼ぶ。
   // デバウンスすることで、ぴよログの一括取り込みなど複数回連続して呼ばれても送信は1回にまとまる。
   function scheduleAutoPublishHistory() {
+    // 送れない状況(オフライン・あいことば未設定など)でも「送るべき変更がある」ことは
+    // 覚えておく。次の起動や画面復帰でretryPendingPublish()が拾って送り直す。
+    setPendingPublish(true);
+    if (!canAutoPublishHistory()) return;
+    clearTimeout(autoPublishTimer);
+    autoPublishTimer = setTimeout(autoPublishHistory, AUTO_PUBLISH_DEBOUNCE_MS);
+  }
+  // 起動時・画面復帰時に、前回送れなかったぶんを送り直す。
+  function retryPendingPublish() {
+    if (!hasPendingPublish()) return;
     if (!canAutoPublishHistory()) return;
     clearTimeout(autoPublishTimer);
     autoPublishTimer = setTimeout(autoPublishHistory, AUTO_PUBLISH_DEBOUNCE_MS);
@@ -1261,13 +1344,7 @@
         return res.json().then(function (data) { remoteHistory = data; });
       })
       .then(function () {
-        return pushFetch("/history", {
-          updatedAt: new Date().toISOString(),
-          feeds: getMergedFeedLogs().map(function (l) { return { at: l.at, ml: l.ml }; }),
-          pees: getMergedPees(),
-          poops: getMergedPoops(),
-          weights: getMergedWeightHistory()
-        });
+        return pushFetch("/history", buildHistoryPayload());
       })
       .then(function (res) {
         if (!res.ok) throw new Error("auto publish failed: " + res.status);
@@ -1275,6 +1352,7 @@
         workerHistoryState = "ok";
         lastSyncAt = new Date();
         lastSyncFailed = false;
+        setPendingPublish(false);
         if (currentScreenName === "settings") renderSyncStatus();
       })
       .catch(function (err) {
@@ -2550,6 +2628,19 @@
     renderPushStatus();
     renderSecretField();
     renderSyncStatus();
+    renderAppVersion();
+  }
+  // いま端末に入っている版を表示する。sw.jsのキャッシュ名から読むので、
+  // sw.jsを上げるだけで自動的に追随する(バージョンを二重管理しない)。
+  function renderAppVersion() {
+    var el = document.getElementById("app-version-text");
+    if (!el || !("caches" in window)) return;
+    caches.keys().then(function (keys) {
+      var name = keys.filter(function (k) { return k.indexOf("sakura-milk-navi-v") === 0; })[0];
+      if (!name) return;
+      el.textContent = "バージョン " + name.replace("sakura-milk-navi-", "");
+      el.hidden = false;
+    }).catch(function () { /* 取れなくても表示しないだけ */ });
   }
   // 「さくらたんのこと」カード: 誕生日・生後日数・体重は読み取り専用の表示のみ。
   // 誕生日はstate.settings.birthDate(初期値2026-07-09)、体重は配信データ込みの実測値
