@@ -965,6 +965,19 @@
     if (estimated !== null) return estimated;
     return row ? row.stdMid : null;
   }
+  // いまこの瞬間にあげてよい量。ホームの表示・記録パネルの初期値・「泣き止まない」画面で
+  // 同じ値を使うために1か所にまとめる(画面ごとに違う量が出ると、どれが正しいのか迷わせる)。
+  // 記録がまだ無いときはnull。
+  function getSuggestedNowAmount() {
+    var perFeed = getPerFeedMl();
+    var lastLog = getLastFeedLog();
+    if (!lastLog || perFeed <= 0) return null;
+    var info = getCycleInfo();
+    var cycleForLast = resolveCycleMinutesForBucket(
+      info.bucketCycles, info.cycleMinutes, new Date(lastLog.at).getHours());
+    var elapsed = (new Date() - new Date(lastLog.at)) / 60000;
+    return calcIrregularAmount(perFeed, elapsed, cycleForLast);
+  }
   // 周期と回数の決定: 記録がたまっていれば実測、足りなければ月齢の標準値。
   // 標準値も併せて返すのは、根拠画面での説明と、夜間の記録漏れ判定に使うため。
   // 機能1: 全体の実測周期に加えて、時間帯別(bucketCycles)も学習する。区分ごとのフォールバックは
@@ -1476,7 +1489,15 @@
       var prepPlan = calcPrepPlan(nextFeed.ml);
       prepEl.textContent = formatPrepPlan(prepPlan);
       prepEl.hidden = false;
-      setMessageWithLineBreaks(hintEl, "飲む目安は" + nextFeed.ml + "ml。残しても、ぜんぶ飲んでも大丈夫");
+      // 予定より早く欲しがったときに「いまならいくつ」がここで分かるようにする。
+      // 出さないと、予定量だけ見て多めにあげてしまったり、記録ボタンを押して
+      // はじめて違う量が出て戸惑うことになる(量の計算はgetSuggestedNowAmountに集約)。
+      var nowSuggestion = getSuggestedNowAmount();
+      var showsNowAmount = remainMin > 0 && nowSuggestion && nowSuggestion.canGiveNow
+        && nowSuggestion.okMl > 0 && nowSuggestion.okMl < nextFeed.ml;
+      setMessageWithLineBreaks(hintEl, showsNowAmount
+        ? "飲む目安は" + nextFeed.ml + "ml。いまあげるなら" + nowSuggestion.okMl + "mlまで"
+        : "飲む目安は" + nextFeed.ml + "ml。残しても、ぜんぶ飲んでも大丈夫");
       hintEl.hidden = false;
       // 目安の時刻はあくまで「用意をはじめる合図」。起こしてまであげる必要はない。
       noteEl.hidden = remainMin > NEXT_FEED_PREP_MINUTES;
@@ -1621,7 +1642,17 @@
   function openFeedPanel() {
     var perFeed = getPerFeedMl();
     var remainingBudget = Math.max(0, getDailyTotalMl() - getTodayTotalMl());
-    feedPanelMl = remainingBudget < 20 ? perFeed : roundToUnit(Math.min(perFeed, remainingBudget), 5);
+    // 初期値は「泣き止まない」画面やホームの表示とおなじ計算にそろえる。満量固定だと、
+    // 前回から30分で押しても満量と出てしまい、飲ませすぎにつながるため。
+    // 予定の時刻を過ぎていれば計算結果は満量になるので、ふだんの記録は今までどおり。
+    var suggestion = getSuggestedNowAmount();
+    var suggested = perFeed;
+    if (suggestion) {
+      suggested = suggestion.canGiveNow
+        ? suggestion.okMl
+        : Math.max(suggestion.smallMl || 0, ROUND_UNIT);
+    }
+    feedPanelMl = remainingBudget < 20 ? suggested : roundToUnit(Math.min(suggested, remainingBudget), 5);
     document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     resetFeedPanelToggles();
     resetFeedPanelTime();
