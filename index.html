@@ -40,6 +40,10 @@
   :root[data-theme="light"] { --bg: #fff3f6; }
   * { box-sizing: border-box; }
   body { margin: 0; }
+  /* iOSは素早い連続タップをダブルタップ拡大と解釈するため、±ボタンを連打すると
+     画面倍率が動いてしまう。ボタンだけ拡大対象から外す（ピンチでの拡大は残すので、
+     文字を大きくして読むことはできる）。 */
+  button { touch-action: manipulation; }
   .app-shell { font-family: var(--font); color: var(--text); background: var(--bg-gradient); max-width: 480px; min-height: 100vh; margin: 0 auto; position: relative; padding-bottom: 96px; overflow-x: hidden; }
   .app-header { padding: 22px 20px 16px; position: sticky; top: 0; z-index: 5; background: var(--bg-gradient); }
   .app-title { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 0.01em; }
