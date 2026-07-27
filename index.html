@@ -1312,21 +1312,49 @@
       else localStorage.removeItem(PENDING_PUBLISH_KEY);
     } catch (err) { /* 容量超過などで書けなくても配信自体は続行する */ }
   }
+  // Workerは at="YYYY-MM-DDTHH:MM" 以外を受け付けず、1件でも不正だと配信が
+  // まるごと400で落ちる。古い版が残した秒つき・UTC表記の記録が1件あるだけで
+  // 以後ずっと同期できなくなるので、送る前にこちら側で整えておく。
+  var PUBLISH_AT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+  var PUBLISH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+  function normalizePublishAt(at) {
+    if (typeof at !== "string") return null;
+    if (PUBLISH_AT_PATTERN.test(at)) return at;
+    // 秒つきやUTC表記(2026-07-24T13:00:00.000Z など)はDate経由でローカル時刻に直す。
+    // 文字を切り詰めるだけだと時差のぶんずれてしまう。
+    var d = new Date(at);
+    return isNaN(d.getTime()) ? null : toLocalISO(d);
+  }
+  function normalizePublishFeed(entry) {
+    if (!entry) return null;
+    var at = normalizePublishAt(entry.at);
+    var ml = Math.round(Number(entry.ml));
+    if (at === null || !isFinite(ml) || ml < 0 || ml > 2000) return null;
+    return { at: at, ml: ml };
+  }
+  function normalizePublishWeight(entry) {
+    if (!entry || typeof entry.date !== "string" || !PUBLISH_DATE_PATTERN.test(entry.date)) return null;
+    var grams = Math.round(Number(entry.grams));
+    if (!isFinite(grams) || grams < 0 || grams > 30000) return null;
+    return { date: entry.date, grams: grams };
+  }
+  function dropNulls(list) {
+    return list.filter(function (x) { return x !== null; });
+  }
   // 配信データの組み立て。自動配信と手動の「みんなに配信する」で必ず同じ内容を送る。
   function buildHistoryPayload() {
     var cutoff = formatDateISO(new Date(Date.now() - HISTORY_PUBLISH_DAYS * 86400000));
     var withinRange = function (at) { return at.slice(0, 10) >= cutoff; };
+    var inRangeEntry = function (e) { return withinRange(e.at); };
     return {
       updatedAt: new Date().toISOString(),
-      feeds: getMergedFeedLogs()
-        .filter(function (l) { return withinRange(l.at); })
-        .map(function (l) { return { at: l.at, ml: l.ml }; }),
-      pees: getMergedPees().filter(withinRange),
-      poops: getMergedPoops().filter(withinRange),
-      weights: getMergedWeightHistory(),
+      feeds: dropNulls(getMergedFeedLogs().map(normalizePublishFeed)).filter(inRangeEntry),
+      pees: dropNulls(getMergedPees().map(normalizePublishAt)).filter(withinRange),
+      poops: dropNulls(getMergedPoops().map(normalizePublishAt)).filter(withinRange),
+      weights: dropNulls(getMergedWeightHistory().map(normalizePublishWeight)),
       // 消した記録は「消したという事実」も配信する。これがないと、他の端末や
       // 取得し直した配信データとマージされたときに復活してしまう。
-      deleted: getMergedDeletedFeeds().filter(function (d) { return withinRange(d.at); })
+      deleted: dropNulls(getMergedDeletedFeeds().map(normalizePublishFeed)).filter(inRangeEntry)
     };
   }
   // 自動配信してよいか: あいことば保存済み かつ Worker側の状態が確定している(成功 or 404未登録)ときだけ。
@@ -1367,8 +1395,11 @@
       .then(function () {
         var payload = buildHistoryPayload();
         return pushFetch("/history", payload).then(function (res) {
-          if (!res.ok) throw new Error("auto publish failed: " + res.status);
-          return payload;
+          if (res.ok) return payload;
+          // 400のときはWorkerがどの配列で落ちたかを返すので、それも理由に含める
+          return describeFailedResponse(res).then(function (reason) {
+            throw new Error("auto publish failed: " + reason);
+          });
         });
       })
       .then(function (payload) {
@@ -1407,9 +1438,21 @@
   // 通信そのものが失敗していればエラー名(TypeErrorなど)を返す。
   function describeSyncError(err) {
     if (!err) return null;
-    var status = String(err.message || "").match(/\b(\d{3})\b/);
-    if (status) return status[1];
-    return err.name || "error";
+    var message = String(err.message || "");
+    var status = message.match(/\b(\d{3})\b/);
+    if (!status) return err.name || "error";
+    // Workerが返した配列名(feeds/pees/poops/weights/deleted)があれば添える
+    var field = message.match(/\b(feeds|pees|poops|weights|deleted|body)\b/);
+    return status[1] + (field ? " " + field[1] : "");
+  }
+  // 失敗した応答から「ステータス＋落ちた配列名」を組み立てる。
+  // 本文が読めない場合でもステータスだけは必ず返す。
+  function describeFailedResponse(res) {
+    return res.json()
+      .then(function (info) {
+        return res.status + (info && info.field ? " " + info.field : "");
+      })
+      .catch(function () { return String(res.status); });
   }
   // 受信の状態。配信の結果だけを見ていると、記録を配信しない端末では永久に空欄になる。
   // "unknown"=まだ取得していない / "no-secret"=あいことば未入力 /
