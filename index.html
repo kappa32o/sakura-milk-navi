@@ -900,6 +900,14 @@
     if (totalMl < MILESTONE_LITER_THRESHOLD_ML) return Math.round(totalMl) + "ml";
     return (totalMl / 1000).toFixed(1) + "L";
   }
+  // 未来の日時は記録させない。1件でも入ると getLastFeedLog() がそれを最新とみなし、
+  // 「次の授乳」と通知が大きく先にずれる。周期学習(calcObservedCycleMinutes)は
+  // 未来を除外しているぶん、ずれていることに気づきにくい。
+  // 記録パネルの±5分調整には clampFeedTimeAdjust があるが、手入力の経路
+  // (過去の記録を追加・記録の修正)には無かったため、ここで揃える。
+  function isFutureAt(atDate) {
+    return !isNaN(atDate.getTime()) && atDate.getTime() > Date.now();
+  }
   // 機能8: 「飲みはじめた時間」調整の上下限クランプ。未来(referenceNowより後)には進めず、
   // referenceNowからTIME_ADJUST_MAX_PAST_MINUTESより前には遡れない。
   function clampFeedTimeAdjust(at, referenceNow) {
@@ -968,10 +976,13 @@
       return !localLogs.some(function (l) {
         return l.ml === r.ml && Math.abs(new Date(l.at).getTime() - rTime) <= HISTORY_DEDUPE_MINUTES * 60000;
       });
-    }).map(function (r, i) {
-      // remote:true は配信データ由来の目印。localStorageに実体が無いため
-      // 一覧では修正・削除ボタンを出さず「受信」バッジで表示する(renderRecordItem参照)。
-      return { id: "h" + i + "-" + r.at, at: r.at, ml: r.ml, irregular: false, remote: true };
+    }).map(function (r) {
+      // remote:true は配信データ由来の目印。localStorageに実体が無いので、
+      // 修正は作り直し・削除は削除記録だけを積む扱いになる(renderRecordItem参照)。
+      //
+      // idに配列の位置を使わない。位置は受信のたびに変わるため、削除確認
+      // (「本当に削除？」)の表示中に受信が走ると、確認状態が別の行に移って見えていた。
+      return { id: "h-" + r.at + "-" + r.ml, at: r.at, ml: r.ml, irregular: false, remote: true };
     });
     return localLogs.concat(extra);
   }
@@ -1528,7 +1539,14 @@
   // 配信がまるごと失敗するようになる(1日20件なら8ヶ月で到達する)。
   // 記録タブの表示は30日、成長のあしあての比較も2週間前なので実用上こまらない。
   // 体重だけは件数が少ない(月に数回)ので全部送る。
-  var HISTORY_PUBLISH_DAYS = 90;
+  // 90日にしていたころは、受信専用の端末(はるたんのiPhone)で90日より古い記録が
+  // まるごと見えなくなり、累計のマイルストーンが日ごとに減っていく状態だった。
+  // 累計なのに減るのでは意味がないため、1年以上さかのぼれる長さにする。
+  var HISTORY_PUBLISH_DAYS = 500;
+  // Worker側は各配列HISTORY_MAX_ITEMS=5000件までで、超えると配信がまるごと失敗する。
+  // 日数だけで切ると1日10件×500日でちょうど上限に達してしまうので、件数でも切る。
+  // 落とすのは古いほうから(新しい記録のほうが日々の判断に使われるため)。
+  var HISTORY_PUBLISH_MAX_ITEMS = 4000;
   // 配信すべき変更が残っているか。オフラインで記録した場合など、送信に失敗しても
   // 次の起動や画面復帰で送り直せるようにフラグを端末に残しておく。
   var PENDING_PUBLISH_KEY = "sakura-milk-navi-pending-publish";
@@ -1569,19 +1587,27 @@
     return list.filter(function (x) { return x !== null; });
   }
   // 配信データの組み立て。自動配信と手動の「みんなに配信する」で必ず同じ内容を送る。
+  // 件数上限を超えるぶんは古いほうから落とす。並び順は昇順のまま保つ。
+  function limitToNewest(list, atOf) {
+    if (list.length <= HISTORY_PUBLISH_MAX_ITEMS) return list;
+    var sorted = list.slice().sort(function (a, b) { return atOf(a) < atOf(b) ? -1 : 1; });
+    return sorted.slice(sorted.length - HISTORY_PUBLISH_MAX_ITEMS);
+  }
   function buildHistoryPayload() {
     var cutoff = formatDateISO(new Date(Date.now() - HISTORY_PUBLISH_DAYS * 86400000));
     var withinRange = function (at) { return at.slice(0, 10) >= cutoff; };
     var inRangeEntry = function (e) { return withinRange(e.at); };
+    var atOfEntry = function (e) { return e.at; };
+    var atOfString = function (s) { return s; };
     return {
       updatedAt: new Date().toISOString(),
-      feeds: dropNulls(getMergedFeedLogs().map(normalizePublishFeed)).filter(inRangeEntry),
-      pees: dropNulls(getMergedPees().map(normalizePublishAt)).filter(withinRange),
-      poops: dropNulls(getMergedPoops().map(normalizePublishAt)).filter(withinRange),
+      feeds: limitToNewest(dropNulls(getMergedFeedLogs().map(normalizePublishFeed)).filter(inRangeEntry), atOfEntry),
+      pees: limitToNewest(dropNulls(getMergedPees().map(normalizePublishAt)).filter(withinRange), atOfString),
+      poops: limitToNewest(dropNulls(getMergedPoops().map(normalizePublishAt)).filter(withinRange), atOfString),
       weights: dropNulls(getMergedWeightHistory().map(normalizePublishWeight)),
       // 消した記録は「消したという事実」も配信する。これがないと、他の端末や
       // 取得し直した配信データとマージされたときに復活してしまう。
-      deleted: dropNulls(getMergedDeletedFeeds().map(normalizePublishFeed)).filter(inRangeEntry)
+      deleted: limitToNewest(dropNulls(getMergedDeletedFeeds().map(normalizePublishFeed)).filter(inRangeEntry), atOfEntry)
     };
   }
   // 自動配信してよいか: あいことば保存済み かつ Worker側の状態が確定している(成功 or 404未登録)ときだけ。
@@ -2820,19 +2846,29 @@
     var form = document.createElement("div");
     form.className = "edit-form";
     var timeVal = log.at.slice(11, 16);
+    // 日付も直せるようにする。日付を固定していたころは、深夜0時台の記録を
+    // 前日23時台に直せず、直そうとすると同じ日の23時台＝未来になってしまっていた。
     form.innerHTML =
-      '<p class="field-note" style="margin:0 0 4px">飲みはじめた時間</p>' +
+      '<p class="field-note" style="margin:0 0 4px">日付</p>' +
+      '<div class="row"><input type="date" value="' + log.at.slice(0, 10) + '" class="edit-date" aria-label="日付"></div>' +
+      '<p class="field-note" style="margin:8px 0 4px">飲みはじめた時間と量</p>' +
       '<div class="row"><input type="time" value="' + timeVal + '" class="edit-time" aria-label="飲みはじめた時間">' +
-      '<input type="number" step="10" value="' + log.ml + '" class="edit-ml"></div>' +
+      '<input type="number" step="10" value="' + log.ml + '" class="edit-ml" aria-label="量"></div>' +
       '<div class="feed-panel-actions"><button class="btn btn-ghost edit-cancel">やめる</button>' +
       '<button class="btn btn-primary edit-save">保存</button></div>';
     item.appendChild(form);
     form.querySelector(".edit-cancel").addEventListener("click", function () { form.remove(); });
     form.querySelector(".edit-save").addEventListener("click", function () {
+      var newDate = form.querySelector(".edit-date").value;
       var newTime = form.querySelector(".edit-time").value;
       var newMl = parseInt(form.querySelector(".edit-ml").value, 10);
-      if (!newTime || isNaN(newMl)) { showToast("時刻と量を確認してね"); return; }
-      updateFeedLog(log, { at: log.at.slice(0, 10) + "T" + newTime, ml: newMl });
+      if (!newDate || !newTime || isNaN(newMl)) { showToast("日付と時刻と量を確認してね"); return; }
+      var newAt = newDate + "T" + newTime;
+      if (isFutureAt(new Date(newAt))) {
+        showToast("まだ先の時間だよ。日付と時刻を見なおしてね");
+        return;
+      }
+      updateFeedLog(log, { at: newAt, ml: newMl });
       showToast("修正したよ");
       renderRecords();
     });
@@ -2866,6 +2902,10 @@
       return;
     }
     var atDate = new Date(date + "T" + time);
+    if (isFutureAt(atDate)) {
+      showToast("まだ先の時間だよ。日付と時刻を見なおしてね");
+      return;
+    }
     addFeedLog(ml, atDate, false);
     if (manualAddPee) addPeeLogs([toLocalISO(atDate)]);
     if (manualAddPoop) addPoopLogs([toLocalISO(atDate)]);
