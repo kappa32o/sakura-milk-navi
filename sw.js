@@ -1,5 +1,5 @@
 "use strict";
-var CACHE_NAME = "sakura-milk-navi-v31";
+var CACHE_NAME = "sakura-milk-navi-v32";
 var PRECACHE_URLS = [
   "./",
   "./index.html",
@@ -37,6 +37,26 @@ self.addEventListener("fetch", function (event) {
   // GET /history へキャッシュ済みのindex.htmlを返してしまい、
   // 「200が返ったのに中身がHTML」という紛らわしい失敗になる。
   if (new URL(event.request.url).origin !== self.location.origin) return;
+  // HTMLはネットワーク優先にする。キャッシュ優先だと、アプリの更新そのものが
+  // 古いキャッシュに阻まれて端末に届かなくなる。
+  // (実際にiPhoneでこれが起き、キャッシュ不具合の修正版が入らなかった)
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then(function (response) {
+          var clone = response.clone();
+          caches.open(CACHE_NAME).then(function (cache) { cache.put(event.request, clone); });
+          return response;
+        })
+        .catch(function () {
+          // 圏外のときだけキャッシュを使う(オフラインでも開けるのは維持する)
+          return caches.match(event.request).then(function (cached) {
+            return cached || caches.match("./index.html");
+          });
+        })
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then(function (cached) {
       if (cached) return cached;
