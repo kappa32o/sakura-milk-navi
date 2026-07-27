@@ -1,5 +1,5 @@
 "use strict";
-var CACHE_NAME = "sakura-milk-navi-v29";
+var CACHE_NAME = "sakura-milk-navi-v30";
 var PRECACHE_URLS = [
   "./",
   "./index.html",
@@ -33,6 +33,10 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") return;
+  // Worker(別オリジン)へのAPI呼び出しは横取りしない。ここを通すと、圏外のときに
+  // GET /history へキャッシュ済みのindex.htmlを返してしまい、
+  // 「200が返ったのに中身がHTML」という紛らわしい失敗になる。
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     caches.match(event.request).then(function (cached) {
       if (cached) return cached;

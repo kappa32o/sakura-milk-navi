@@ -1203,37 +1203,55 @@
       // 成否が決まってから再計算する。取得は画面の初回表示より後になるため。
       remoteHistoryResolved = true;
       rerenderCurrentScreen();
+      // 受け取れているかを設定画面にも反映する。はるたんの端末は記録を配信しない
+      // (受信しかしない)ので、これがないと同期の状態がいつまでも空欄のままになり、
+      // 届かない原因を切り分けられない。
+      if (currentScreenName === "settings") renderSyncStatus();
       // 前回オフラインなどで送れなかったぶんがあれば、このタイミングで送り直す。
       retryPendingPublish();
     };
     var secret = getPushSecret();
-    if (secret && isPushConfigured()) {
-      pushFetchGet("/history")
-        .then(function (res) {
-          if (res.status === 404) {
-            // まだ誰も配信していない、と確定できた状態。自動配信は許可してよい。
-            workerHistoryState = "empty";
-            return fetchHistoryFromFile();
-          }
-          if (!res.ok) throw new Error("worker history fetch failed: " + res.status);
-          return res.json().then(function (data) {
-            remoteHistory = data;
-            workerHistoryState = "ok";
-          });
-        })
-        .catch(function (err) {
-          // 通信エラー等でWorker側の状態(最新の配信データ)が確定できなかった。
-          // 表示はこれまでどおりhistory.jsonにフォールバックするが、
-          // この状態のまま自動配信すると他端末の配信済みデータを消しかねないため禁止する
-          // (canAutoPublishHistory参照)。
-          workerHistoryState = "failed";
-          console.error("[sakura-milk-navi] Workerからの配信データ取得に失敗しました。history.jsonにフォールバックします。", err);
-          return fetchHistoryFromFile();
-        })
-        .then(afterResolved);
-    } else {
+    if (!secret || !isPushConfigured()) {
+      // あいことば未入力。この端末には配信データが一切届かない状態。
+      receiveState = "no-secret";
       fetchHistoryFromFile().then(afterResolved);
+      return;
     }
+    pushFetchGet("/history")
+      .then(function (res) {
+        if (res.status === 401) {
+          // あいことばが違う。通信自体はできているので、入れ直せば直ると伝えられる。
+          receiveState = "bad-secret";
+          workerHistoryState = "failed";
+          return fetchHistoryFromFile();
+        }
+        if (res.status === 404) {
+          // まだ誰も配信していない、と確定できた状態。自動配信は許可してよい。
+          workerHistoryState = "empty";
+          receiveState = "empty";
+          return fetchHistoryFromFile();
+        }
+        if (!res.ok) throw new Error("worker history fetch failed: " + res.status);
+        return res.json().then(function (data) {
+          remoteHistory = data;
+          workerHistoryState = "ok";
+          receiveState = "ok";
+          syncedFeedCount = (data && data.feeds) ? data.feeds.length : 0;
+          lastSyncAt = new Date();
+          lastSyncFailed = false;
+        });
+      })
+      .catch(function (err) {
+        // 通信エラー等でWorker側の状態(最新の配信データ)が確定できなかった。
+        // 表示はこれまでどおりhistory.jsonにフォールバックするが、
+        // この状態のまま自動配信すると他端末の配信済みデータを消しかねないため禁止する
+        // (canAutoPublishHistory参照)。
+        workerHistoryState = "failed";
+        receiveState = "failed";
+        console.error("[sakura-milk-navi] Workerからの配信データ取得に失敗しました。history.jsonにフォールバックします。", err);
+        return fetchHistoryFromFile();
+      })
+      .then(afterResolved);
   }
   // 端末の削除記録と、配信データに含まれる削除記録を合わせたもの。
   function getMergedDeletedFeeds() {
@@ -1344,12 +1362,17 @@
         return res.json().then(function (data) { remoteHistory = data; });
       })
       .then(function () {
-        return pushFetch("/history", buildHistoryPayload());
+        var payload = buildHistoryPayload();
+        return pushFetch("/history", payload).then(function (res) {
+          if (!res.ok) throw new Error("auto publish failed: " + res.status);
+          return payload;
+        });
       })
-      .then(function (res) {
-        if (!res.ok) throw new Error("auto publish failed: " + res.status);
+      .then(function (payload) {
         // 送った内容がWorker上の最新状態になったので、以後の自動配信可否判定にも反映する
         workerHistoryState = "ok";
+        receiveState = "ok";
+        syncedFeedCount = payload.feeds.length;
         lastSyncAt = new Date();
         lastSyncFailed = false;
         setPendingPublish(false);
@@ -1364,21 +1387,34 @@
         console.error("[sakura-milk-navi] 記録の自動配信に失敗しました(ローカルの記録は保存済みです)", err);
       });
   }
-  // 同期の状態。配信が黙って失敗していても気づけるよう、設定画面に出す。
+  // 同期の状態。配信も受信も黙って失敗していることがあるので、設定画面に出す。
+  // 送る側(パパ)と受け取る側(はるたん)のどちらで止まっているかを、
+  // この一行だけで切り分けられるようにしておく。
   var lastSyncAt = null;
   var lastSyncFailed = false;
+  // 受信の状態。配信の結果だけを見ていると、記録を配信しない端末では永久に空欄になる。
+  // "unknown"=まだ取得していない / "no-secret"=あいことば未入力 /
+  // "bad-secret"=あいことばが違う / "ok"=受け取れた /
+  // "empty"=まだ誰も配信していない / "failed"=通信できなかった
+  var receiveState = "unknown";
+  // Worker上にある授乳記録の件数。届いているかどうかが件数で一目でわかる。
+  var syncedFeedCount = 0;
+  function buildSyncStatusMessage() {
+    if (receiveState === "no-secret") return "あいことばを入れると、パパの記録がとどくよ";
+    if (receiveState === "bad-secret") return "あいことばが違うみたい。パパに聞いてみてね";
+    // 送信の失敗は受信より重い(この端末の記録がまだ誰にも届いていない)ので先に出す
+    if (lastSyncFailed || receiveState === "failed") return "いま同期できていないよ。あとでもう一度ひらいてね";
+    if (receiveState === "empty") return "まだ配信された記録がないよ";
+    if (lastSyncAt) return "記録" + syncedFeedCount + "件がとどいてるよ " + formatTime(lastSyncAt);
+    return "";
+  }
   function renderSyncStatus() {
     var el = document.getElementById("sync-status-text");
     if (!el) return;
-    if (lastSyncFailed) {
-      setMessageWithLineBreaks(el, "いま同期できていないよ。あとでもう一度ひらいてね");
-      el.hidden = false;
-    } else if (lastSyncAt) {
-      el.textContent = "さいごの同期 " + formatTime(lastSyncAt);
-      el.hidden = false;
-    } else {
-      el.hidden = true;
-    }
+    var message = buildSyncStatusMessage();
+    if (!message) { el.hidden = true; return; }
+    setMessageWithLineBreaks(el, message);
+    el.hidden = false;
   }
   /* ---------- プッシュ通知 ---------- */
   // ワーカーをデプロイしたら worker/README の手順に沿って下の2つを実際の値に書き換えてね。
@@ -2441,25 +2477,26 @@
         return res.json().then(function (data) { remoteHistory = data; });
       })
       .then(function () {
-        var feeds = getMergedFeedLogs().map(function (l) { return { at: l.at, ml: l.ml }; });
-        sentCount = feeds.length;
-        return pushFetch("/history", {
-          updatedAt: new Date().toISOString(),
-          feeds: feeds,
-          pees: getMergedPees(),
-          poops: getMergedPoops(),
-          weights: getMergedWeightHistory()
-        });
+        // 自動配信とまったく同じ内容を送る。ここで独自に組み立てると、
+        // 削除の記録(deleted)が抜けて、消したはずの記録が全端末で復活してしまう。
+        var payload = buildHistoryPayload();
+        sentCount = payload.feeds.length;
+        return pushFetch("/history", payload);
       })
       .then(function (res) {
         if (res.status === 401) {
+          receiveState = "bad-secret";
+          if (currentScreenName === "settings") renderSyncStatus();
           showToast("配信できなかったよ。あいことばを確認してね");
           return;
         }
         if (!res.ok) throw new Error("history publish failed: " + res.status);
         workerHistoryState = "ok";
+        receiveState = "ok";
+        syncedFeedCount = sentCount;
         lastSyncAt = new Date();
         lastSyncFailed = false;
+        setPendingPublish(false);
         showToast(sentCount + "件を配信したよ");
       })
       .catch(function (err) {
