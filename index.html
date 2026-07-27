@@ -343,9 +343,9 @@
         <p class="next-feed-note" id="outing-before-leave" hidden></p>
       </div>
       <div class="card" id="outing-pack" hidden>
-        <p class="eyebrow">もっていくもの</p>
+        <p class="eyebrow">持ち物のめやす</p>
         <ul class="pack-list" id="outing-pack-list"></ul>
-        <p class="note">予定どおりにこないのがふつうだから、少し多めにしているよ</p>
+        <p class="note">ぜんぶ揃えなくて大丈夫。足りなくて困らないための目安だよ</p>
       </div>
     </section>
     <section id="screen-records" class="screen" hidden>
@@ -558,10 +558,9 @@
   // 予定どおりに来ないのがふつうなので、見込み回数にこれだけ足したぶんを持つ。
   // 「見込み0回でも1回分」という下限にしていたころは、周期が3時間前後だと
   // 1時間・2時間・3時間の結果がぜんぶ同じ(1回分)になり、選ぶ意味がなくなっていた。
+  // 予備は1回分まで。長い外出はもう1回分ふやしていたが、
+  // 「出先で1回しか来ないのに3本」となって過剰だった。荷物は軽いほうがいい。
   var OUTING_SPARE_FEEDS = 1;
-  // 長い外出は周期のブレが積み重なるぶん読みが外れやすいので、予備をもう1回分ふやす。
-  var OUTING_LONG_TRIP_MINUTES = 240;
-  var OUTING_SPARE_FEEDS_LONG = 2;
   // おでかけに持ち出すのはアイクレオの紙パック(調乳ずみ)。粉とお湯は持たない。
   var OUTING_PACK_ML = 120;
   // おむつは授乳回数＋この枚数。漏れと想定外のうんちのぶんの余裕。
@@ -865,9 +864,7 @@
       cursor = new Date(cursor.getTime()
         + resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, cursor.getHours()) * 60000);
     }
-    var spare = durationMinutes >= OUTING_LONG_TRIP_MINUTES
-      ? OUTING_SPARE_FEEDS_LONG : OUTING_SPARE_FEEDS;
-    var carryFeeds = feeds.length + spare;
+    var carryFeeds = feeds.length + OUTING_SPARE_FEEDS;
     return {
       endTime: endTime,
       beforeLeave: beforeLeave,
@@ -878,12 +875,9 @@
     };
   }
   // 累計のマイルストーン。記録があるぶんの合計を返す(記録が欠けている期間は数えられない)。
-  // 夜中の判定は応援メッセージの夜間帯(NIGHT_MESSAGE_START_HOUR〜NIGHT_MESSAGE_END_HOUR)と
-  // そろえる。アプリの中で「夜」の定義が2つあると説明がぶれるため。
-  function calcMilestones(feedLogs) {
+  function calcMilestones(feedLogs, pees, poops) {
     var totalMl = 0;
     var feedCount = 0;
-    var nightCount = 0;
     (feedLogs || []).forEach(function (log) {
       var at = new Date(log.at);
       if (isNaN(at.getTime())) return;
@@ -891,14 +885,14 @@
       if (!isFinite(ml) || ml <= 0) return;
       totalMl += ml;
       feedCount += 1;
-      var hour = at.getHours();
-      if (hour >= NIGHT_MESSAGE_START_HOUR || hour < NIGHT_MESSAGE_END_HOUR) nightCount += 1;
     });
     return {
       totalMl: totalMl,
       feedCount: feedCount,
-      nightCount: nightCount,
-      bottleCount: Math.floor(totalMl / MILESTONE_BOTTLE_ML)
+      bottleCount: Math.floor(totalMl / MILESTONE_BOTTLE_ML),
+      // おしっことうんちの単純な足し算(2026-07-28 ユーザー指定)。
+      // 同じ時刻に両方ついていれば2回と数えるが、細かく突き合わせるより分かりやすさを取る。
+      diaperCount: (pees || []).length + (poops || []).length
     };
   }
   // 累計の量は桁が大きくなるとmlでは読めなくなるので、1L以上はLに丸める。
@@ -1992,7 +1986,7 @@
     var card = document.getElementById("milestone-card");
     var listEl = document.getElementById("milestone-list");
     var noteEl = document.getElementById("milestone-note");
-    var stats = calcMilestones(getMergedFeedLogs());
+    var stats = calcMilestones(getMergedFeedLogs(), getMergedPees(), getMergedPoops());
     // 記録が1件もないうちは、0が並ぶだけで意味がないのでカードごと隠す
     if (stats.feedCount === 0) {
       card.hidden = true;
@@ -2011,13 +2005,16 @@
       // 記録はパパの端末ぶんもマージされた「家族の合計」。はるたん一人の数字ではない。
       { icon: "🤱", value: "授乳 " + stats.feedCount + "回", label: "ふたりで積み上げてきたぶんだよ" }
     ];
-    if (stats.nightCount > 0) {
+    // おしっこ・うんちは記録が任意なので、1件も無いときは項目ごと出さない
+    if (stats.diaperCount > 0) {
       items.push({
-        icon: "🌙",
-        value: "夜中の授乳 " + stats.nightCount + "回",
-        label: "夜22時〜朝6時のがんばりだね"
+        icon: "🧷",
+        value: "おむつ替え " + stats.diaperCount + "回",
+        label: "おしっことうんちの記録ぶんだよ"
       });
     }
+    // 夜中の回数はここに出さない。夜間の担当はみつひこなので、
+    // はるたんの画面に回数だけ並べても自慢に読めてしまう(2026-07-28 ユーザー判断)。
     if (typeof ageDays === "number" && ageDays >= 0) {
       items.push({
         icon: "🌸",
@@ -2631,22 +2628,22 @@
     var items = [
       {
         icon: "🥤",
-        name: "アイクレオの紙パック " + totalPacks + "本",
+        name: "紙パック " + totalPacks + "本くらい",
         sub: packsPerFeed > 1
-          ? "1回に" + packsPerFeed + "本使うから、" + plan.carryFeeds + "回ぶんだよ"
-          : "1本" + OUTING_PACK_ML + "ml。" + plan.carryFeeds + "回ぶんだよ"
+          ? "アイクレオ。1回に" + packsPerFeed + "本使うから" + plan.carryFeeds + "回ぶん"
+          : "アイクレオ 1本" + OUTING_PACK_ML + "ml。" + plan.carryFeeds + "回ぶん"
       },
       {
         icon: "👶",
-        name: "紙パック用の乳首 " + nipples + "個",
+        name: "紙パックの乳首 " + nipples + "個くらい",
         sub: plan.carryFeeds > OUTING_MAX_NIPPLES
-          ? plan.carryFeeds + "回ぶんあるから、途中で洗えるところを探しておこう"
-          : "出先では洗えないから、使う回数ぶんあると安心だよ"
+          ? plan.carryFeeds + "回ぶんあるから、途中で洗えるところを探せると安心"
+          : "出先では洗えないから、使う回数ぶんあると安心"
       },
-      { icon: "🧷", name: "おむつ " + plan.diaperCount + "枚", sub: "おしりふきもいっしょにね" },
+      { icon: "🧷", name: "おむつ " + plan.diaperCount + "枚くらい", sub: "おしりふきもいっしょにね" },
       {
         icon: "👕",
-        name: "着替え " + (plan.carryFeeds >= OUTING_EXTRA_CLOTHES_FEEDS ? "2枚" : "1枚"),
+        name: "着替え " + (plan.carryFeeds >= OUTING_EXTRA_CLOTHES_FEEDS ? "2枚" : "1枚") + "くらい",
         sub: "吐き戻しとうんち漏れのぶん"
       },
       { icon: "🌸", name: "ガーゼとビニール袋", sub: "よごれものを入れるぶんもね" }
