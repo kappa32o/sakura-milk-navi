@@ -129,6 +129,22 @@
   .papa-message { background: var(--surface-2); }
   .papa-label { margin: 0 0 6px; font-weight: 700; color: var(--primary-dark); font-size: 0.85rem; }
   .papa-message p:last-child { margin: 0; font-size: 1rem; line-height: 1.55; font-weight: 600; }
+  .outing-options { display: flex; flex-wrap: wrap; gap: 10px; }
+  .outing-options .btn { flex: 1 1 calc(50% - 5px); padding: 14px 6px; font-size: 0.95rem; }
+  .outing-options .btn.is-active { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: #fff; border-color: transparent; box-shadow: var(--shadow-pop); }
+  .outing-headline { margin: 0 0 8px; font-size: 1.14rem; font-weight: 800; line-height: 1.5; color: var(--primary-dark); }
+  .pack-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .pack-item { display: flex; align-items: center; gap: 12px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .pack-item .pack-icon { font-size: 1.24rem; flex-shrink: 0; }
+  .pack-item .pack-body { display: flex; flex-direction: column; gap: 2px; }
+  .pack-item .pack-name { font-size: 0.95rem; font-weight: 800; line-height: 1.35; }
+  .pack-item .pack-sub { font-size: 0.76rem; color: var(--text-muted); line-height: 1.45; }
+  .milestone-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
+  .milestone-item { display: flex; align-items: center; gap: 12px; }
+  .milestone-item .ms-icon { font-size: 1.34rem; flex-shrink: 0; width: 30px; text-align: center; }
+  .milestone-item .ms-body { display: flex; flex-direction: column; gap: 1px; }
+  .milestone-item .ms-value { font-size: 1.1rem; font-weight: 800; color: var(--primary-dark); line-height: 1.3; }
+  .milestone-item .ms-label { font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; }
   .screen-title { margin: 6px 16px 14px; font-size: 1.24rem; font-weight: 800; }
   .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; font-size: 0.92rem; font-weight: 700; color: var(--text); }
   .field input[type="date"], .field input[type="number"], .field input[type="time"], .field textarea {
@@ -245,6 +261,7 @@
       <div class="cta-stack">
         <button class="btn btn-primary btn-block" id="btn-open-feed-panel">🍼 いま飲ませた</button>
         <button class="btn btn-cry btn-block" id="btn-go-irregular">😭 泣き止まない…</button>
+        <button class="btn btn-secondary btn-block" id="btn-go-outing">🚗 おでかけの準備</button>
       </div>
       <div class="card encouragement-card">
         <p id="encouragement-text">今日もほんとうにえらい。はるたんのペースで大丈夫</p>
@@ -257,6 +274,11 @@
         <p class="timechart-summary" id="timechart-summary"></p>
         <div class="timechart-svg-wrap" id="timechart-svg"></div>
         <div id="timechart-rows"></div>
+      </div>
+      <div class="card" id="milestone-card" hidden>
+        <p class="eyebrow">これまでのこと</p>
+        <ul class="milestone-list" id="milestone-list"></ul>
+        <p class="note" id="milestone-note"></p>
       </div>
     </section>
     <section id="screen-irregular" class="screen" hidden>
@@ -304,6 +326,26 @@
       <div class="card papa-message">
         <p class="papa-label">💬 パパより:</p>
         <p id="irregular-papa-message">泣いてても大丈夫、はるたんのペースでOK</p>
+      </div>
+    </section>
+    <section id="screen-outing" class="screen" hidden>
+      <button class="link-back" id="outing-back-top">← ホームへ</button>
+      <div class="card">
+        <p class="eyebrow">おでかけの準備</p>
+        <h3>どれくらい出かける？</h3>
+        <div class="outing-options" id="outing-options"></div>
+        <p class="field-note" style="margin:12px 0 0">だいたいでいいよ。あとから選び直せるよ</p>
+      </div>
+      <div class="card" id="outing-result" hidden>
+        <p class="eyebrow">出先の授乳</p>
+        <p class="outing-headline" id="outing-headline"></p>
+        <p class="body-text" id="outing-times"></p>
+        <p class="next-feed-note" id="outing-before-leave" hidden></p>
+      </div>
+      <div class="card" id="outing-pack" hidden>
+        <p class="eyebrow">もっていくもの</p>
+        <ul class="pack-list" id="outing-pack-list"></ul>
+        <p class="note">予定どおりにこないのがふつうだから、少し多めにしているよ</p>
       </div>
     </section>
     <section id="screen-records" class="screen" hidden>
@@ -502,6 +544,40 @@
   // 機能8: 記録パネルの「飲みはじめた時間」調整。未来には進めず、3時間より前には遡れない。
   var TIME_ADJUST_STEP_MINUTES = 5;
   var TIME_ADJUST_MAX_PAST_MINUTES = 180;
+  // おでかけモード: 出発から帰宅予定までに来る授乳を数えて、持ち物に変換する。
+  // 「何時に帰る」を入れさせると、数字を決められずに手が止まる。ざっくりした長さを選ぶだけにする。
+  var OUTING_DURATION_OPTIONS = [
+    { minutes: 60, label: "1時間" },
+    { minutes: 120, label: "2時間" },
+    { minutes: 180, label: "3時間" },
+    { minutes: 300, label: "半日（5時間）" }
+  ];
+  // 出発直後(この分数以内)に来る授乳は、家で飲ませてから出るほうが確実に楽。
+  // 持ち物からは外して、案内だけ出す。
+  var OUTING_FEED_BEFORE_LEAVE_MINUTES = 30;
+  // 予定どおりに来ないのがふつうなので、見込み回数にこれだけ足したぶんを持つ。
+  // 「見込み0回でも1回分」という下限にしていたころは、周期が3時間前後だと
+  // 1時間・2時間・3時間の結果がぜんぶ同じ(1回分)になり、選ぶ意味がなくなっていた。
+  var OUTING_SPARE_FEEDS = 1;
+  // 長い外出は周期のブレが積み重なるぶん読みが外れやすいので、予備をもう1回分ふやす。
+  var OUTING_LONG_TRIP_MINUTES = 240;
+  var OUTING_SPARE_FEEDS_LONG = 2;
+  // おでかけに持ち出すのはアイクレオの紙パック(調乳ずみ)。粉とお湯は持たない。
+  var OUTING_PACK_ML = 120;
+  // おむつは授乳回数＋この枚数。漏れと想定外のうんちのぶんの余裕。
+  var OUTING_SPARE_DIAPERS = 2;
+  // 長時間を選んだときに持ち物リストが非現実的な数にならないようにする上限。
+  var OUTING_MAX_FEEDS = 8;
+  // 紙パック用の乳首は使う回数ぶん持つのが基本だが、何個も持ち歩くのは現実的でない。
+  // これを超えるときは「途中で洗える場所を探す」案内に切り替える。
+  var OUTING_MAX_NIPPLES = 3;
+  // 着替えを2枚にする授乳回数のしきい値(それだけ長い外出なら替えは1枚では足りない)。
+  var OUTING_EXTRA_CLOTHES_FEEDS = 3;
+  // 累計のマイルストーン: 総量をペットボトル(500ml)換算で添える。
+  // Lの数字だけではピンとこないので、目に見える物に置き換えて実感につなげる。
+  var MILESTONE_BOTTLE_ML = 500;
+  // mlのまま出すか、Lに丸めるかの境目。
+  var MILESTONE_LITER_THRESHOLD_ML = 1000;
   var DEFAULT_SETTINGS = {
     birthDate: "2026-07-09",
     weightGrams: null,
@@ -758,6 +834,78 @@
     var joined = plan.scoops.map(function (s) { return s.unitMl + "mlスプーン" + s.count + "杯"; }).join("と");
     return withVerb ? joined + "だよ" : joined;
   }
+  // おでかけモード: 出発(now)から帰宅予定までのあいだに来る授乳を並べる。
+  // 次の1回だけでなく2回目以降も出すので、calcNextFeedは使わずここで自前に積む
+  // (時刻が進むと時間帯区分も変わるため、1回ごとにその時刻の周期を引き直す)。
+  //
+  // 1日の残り予算では絞らない。calcNextFeedが予算切れで{done:true}を返す状況でも、
+  // 出先で足りないほうが困る。持ち物は多めに倒すのが安全側。
+  function calcOutingPlan(lastLog, perFeedMl, bucketCycles, fallbackCycleMinutes, now, durationMinutes) {
+    var endTime = new Date(now.getTime() + durationMinutes * 60000);
+    var cursor;
+    if (lastLog) {
+      var lastAt = new Date(lastLog.at);
+      var firstCycle = resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, lastAt.getHours());
+      cursor = new Date(lastAt.getTime() + firstCycle * 60000);
+      // 前回からすでに周期を過ぎているなら、次は「いま」から数える
+      if (cursor.getTime() < now.getTime()) cursor = new Date(now.getTime());
+    } else {
+      cursor = new Date(now.getTime());
+    }
+    // 出る直前に来るぶんは家で済ませる案内にまわし、持ち物からは外す
+    var beforeLeave = null;
+    if (cursor.getTime() <= now.getTime() + OUTING_FEED_BEFORE_LEAVE_MINUTES * 60000) {
+      beforeLeave = new Date(cursor.getTime());
+      cursor = new Date(cursor.getTime()
+        + resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, cursor.getHours()) * 60000);
+    }
+    var feeds = [];
+    while (cursor.getTime() <= endTime.getTime() && feeds.length < OUTING_MAX_FEEDS) {
+      feeds.push({ time: new Date(cursor.getTime()), ml: roundToUnit(perFeedMl) });
+      cursor = new Date(cursor.getTime()
+        + resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, cursor.getHours()) * 60000);
+    }
+    var spare = durationMinutes >= OUTING_LONG_TRIP_MINUTES
+      ? OUTING_SPARE_FEEDS_LONG : OUTING_SPARE_FEEDS;
+    var carryFeeds = feeds.length + spare;
+    return {
+      endTime: endTime,
+      beforeLeave: beforeLeave,
+      feeds: feeds,
+      carryFeeds: carryFeeds,
+      // おむつは「授乳のたびに1枚」を基準にする。持っていくミルクの回数に合わせる。
+      diaperCount: carryFeeds + OUTING_SPARE_DIAPERS
+    };
+  }
+  // 累計のマイルストーン。記録があるぶんの合計を返す(記録が欠けている期間は数えられない)。
+  // 夜中の判定は応援メッセージの夜間帯(NIGHT_MESSAGE_START_HOUR〜NIGHT_MESSAGE_END_HOUR)と
+  // そろえる。アプリの中で「夜」の定義が2つあると説明がぶれるため。
+  function calcMilestones(feedLogs) {
+    var totalMl = 0;
+    var feedCount = 0;
+    var nightCount = 0;
+    (feedLogs || []).forEach(function (log) {
+      var at = new Date(log.at);
+      if (isNaN(at.getTime())) return;
+      var ml = Number(log.ml);
+      if (!isFinite(ml) || ml <= 0) return;
+      totalMl += ml;
+      feedCount += 1;
+      var hour = at.getHours();
+      if (hour >= NIGHT_MESSAGE_START_HOUR || hour < NIGHT_MESSAGE_END_HOUR) nightCount += 1;
+    });
+    return {
+      totalMl: totalMl,
+      feedCount: feedCount,
+      nightCount: nightCount,
+      bottleCount: Math.floor(totalMl / MILESTONE_BOTTLE_ML)
+    };
+  }
+  // 累計の量は桁が大きくなるとmlでは読めなくなるので、1L以上はLに丸める。
+  function formatTotalVolume(totalMl) {
+    if (totalMl < MILESTONE_LITER_THRESHOLD_ML) return Math.round(totalMl) + "ml";
+    return (totalMl / 1000).toFixed(1) + "L";
+  }
   // 機能8: 「飲みはじめた時間」調整の上下限クランプ。未来(referenceNowより後)には進めず、
   // referenceNowからTIME_ADJUST_MAX_PAST_MINUTESより前には遡れない。
   function clampFeedTimeAdjust(at, referenceNow) {
@@ -886,7 +1034,9 @@
       feedLogs: [],
       pees: [],
       poops: [],
-      deletedFeeds: []
+      deletedFeeds: [],
+      // 削除記録を打ち消したぶん。詳しくは reviveFeedEntry() を参照。
+      revivedFeeds: []
     };
   }
   function loadState() {
@@ -915,7 +1065,8 @@
         // 既存端末にはまだ無いフィールドなので、無ければ空配列にフォールバックする
         pees: Array.isArray(parsed.pees) ? parsed.pees : [],
         poops: Array.isArray(parsed.poops) ? parsed.poops : [],
-        deletedFeeds: Array.isArray(parsed.deletedFeeds) ? parsed.deletedFeeds : []
+        deletedFeeds: Array.isArray(parsed.deletedFeeds) ? parsed.deletedFeeds : [],
+        revivedFeeds: Array.isArray(parsed.revivedFeeds) ? parsed.revivedFeeds : []
       };
     } catch (err) {
       console.error("[sakura-milk-navi] 状態の読み込みに失敗しました。初期状態を使用します。", err);
@@ -1102,35 +1253,88 @@
     return a.ml === b.ml
       && Math.abs(new Date(a.at).getTime() - new Date(b.at).getTime()) <= HISTORY_DEDUPE_MINUTES * 60000;
   }
+  // 削除記録(tombstone)の打ち消し。
+  //
+  // 同じ時刻・量の削除記録が残っていると、いま足した記録が消されてしまう。
+  // ところがローカルの deletedFeeds から取り除くだけでは足りない。削除記録はサーバ側にも
+  // 残っていて、getMergedDeletedFeeds() が毎回それを足し直すからだ。
+  // そこで「入れ直した」という事実をこの端末に覚えさせ(revivedFeeds)、マージのときに除外する。
+  // 配信ペイロードもマージ結果から作るので、これでサーバ側の削除記録も次の配信で消える。
+  function reviveFeedEntry(entry) {
+    var mark = { at: entry.at, ml: entry.ml };
+    return {
+      deletedFeeds: (state.deletedFeeds || []).filter(function (d) { return !isSameFeedEntry(d, entry); }),
+      revivedFeeds: (state.revivedFeeds || [])
+        .filter(function (r) { return !isSameFeedEntry(r, entry); })
+        .concat([mark])
+    };
+  }
   function addFeedLog(ml, atDate, irregular) {
     var log = { id: "f" + Date.now() + Math.random().toString(16).slice(2, 8), at: toLocalISO(atDate), ml: ml, irregular: !!irregular };
-    state = Object.assign({}, state, {
-      feedLogs: state.feedLogs.concat([log]),
-      // 同じ時刻・量の削除記録が残っていると、いま足したものが消されてしまうので取り除く
-      deletedFeeds: (state.deletedFeeds || []).filter(function (d) { return !isSameFeedEntry(d, log); })
+    state = Object.assign({}, state, reviveFeedEntry(log), {
+      feedLogs: state.feedLogs.concat([log])
     });
     saveState();
     scheduleAutoPublishHistory();
   }
-  function deleteFeedLog(id) {
-    var target = null;
-    state.feedLogs.forEach(function (l) { if (l.id === id) target = l; });
+  // 記録を削除する。引数はidではなく記録そのもの。
+  // 配信データ由来の行(remote:true)はlocalStorageに実体が無いのでidでは引けないが、
+  // 削除記録(tombstone)は at と ml だけで突き合わせるので積める。
+  // これがないと、他の端末が配信した記録をこの端末から消す手段がなくなる。
+  function deleteFeedLog(log) {
+    if (!log) return;
     // 「消した」という事実を残す。これがないと、配信データを取得し直したときや
     // 他の端末とマージしたときに、消したはずの記録が復活してしまう。
     var deleted = (state.deletedFeeds || []).slice();
-    if (target && !deleted.some(function (d) { return isSameFeedEntry(d, target); })) {
-      deleted.push({ at: target.at, ml: target.ml });
+    if (!deleted.some(function (d) { return isSameFeedEntry(d, log); })) {
+      deleted.push({ at: log.at, ml: log.ml });
     }
     state = Object.assign({}, state, {
-      feedLogs: state.feedLogs.filter(function (l) { return l.id !== id; }),
-      deletedFeeds: deleted
+      // remoteの行は実体が無いのでこのfilterでは何も減らない(tombstoneだけが効く)
+      feedLogs: state.feedLogs.filter(function (l) { return l.id !== log.id; }),
+      deletedFeeds: deleted,
+      // 前に入れ直した記録をまた消す場合。打ち消しを取り消さないと削除が効かない。
+      revivedFeeds: (state.revivedFeeds || []).filter(function (r) { return !isSameFeedEntry(r, log); })
     });
     saveState();
     scheduleAutoPublishHistory();
   }
-  function updateFeedLog(id, changes) {
+  // 記録を修正する。引数はidではなく記録そのもの(deleteFeedLogと同じ理由)。
+  //
+  // 時刻や量を変えると、変更前の記録が配信データ側やほかの端末に残ったままになる。
+  // isSameFeedEntryは「ml一致かつ5分以内」しか同一とみなさないので、それを超える修正
+  // (6:28→6:15 など)をすると、マージのときに変更前のぶんが「別の記録」として復活する。
+  // 実際に2026-07-28、6:28を6:15に直したら6:28が受信データとして戻り、
+  // 受信行には修正・削除ボタンが出ないため直す手段がなくなった。だから変更前を削除記録に積む。
+  function updateFeedLog(log, changes) {
+    if (!log) return;
+    var after = Object.assign({}, log, changes);
+    var deleted = (state.deletedFeeds || []).slice();
+    if (!isSameFeedEntry(log, after)
+        && !deleted.some(function (d) { return isSameFeedEntry(d, log); })) {
+      deleted.push({ at: log.at, ml: log.ml });
+    }
+    // 直した内容と同じ削除記録が残っていると、いま直したものが消えてしまう。
+    // サーバ側にも残っているので、打ち消した事実を revivedFeeds に覚えさせる。
+    var revived = (state.revivedFeeds || [])
+      .filter(function (r) { return !isSameFeedEntry(r, after); })
+      .concat([{ at: after.at, ml: after.ml }]);
+    deleted = deleted.filter(function (d) { return !isSameFeedEntry(d, after); });
+    var feedLogs;
+    if (log.remote) {
+      // 配信データ由来には実体が無く上書きできないので、
+      // 変更前を削除記録に積んだうえで、この端末の記録として作り直す。
+      feedLogs = state.feedLogs.concat([{
+        id: "f" + Date.now() + Math.random().toString(16).slice(2, 8),
+        at: after.at, ml: after.ml, irregular: !!after.irregular
+      }]);
+    } else {
+      feedLogs = state.feedLogs.map(function (l) {
+        return l.id === log.id ? Object.assign({}, l, changes) : l;
+      });
+    }
     state = Object.assign({}, state, {
-      feedLogs: state.feedLogs.map(function (l) { return l.id === id ? Object.assign({}, l, changes) : l; })
+      feedLogs: feedLogs, deletedFeeds: deleted, revivedFeeds: revived
     });
     saveState();
     scheduleAutoPublishHistory();
@@ -1264,7 +1468,13 @@
       if (!r || typeof r.at !== "string") return;
       if (!merged.some(function (d) { return isSameFeedEntry(d, r); })) merged.push(r);
     });
-    return merged;
+    // 入れ直したぶんの削除記録は無効にする(reviveFeedEntry参照)。
+    // サーバ側に残った削除記録を打ち消せるのはここだけ。
+    var revived = state.revivedFeeds || [];
+    if (revived.length === 0) return merged;
+    return merged.filter(function (d) {
+      return !revived.some(function (r) { return isSameFeedEntry(r, d); });
+    });
   }
   function getMergedFeedLogs() {
     var merged = mergeFeedLogs(state.feedLogs, remoteHistory ? remoteHistory.feeds : null);
@@ -1669,7 +1879,7 @@
     });
   }
   /* ---------- 画面切り替え ---------- */
-  var SCREENS = ["home", "irregular", "records", "evidence", "settings"];
+  var SCREENS = ["home", "irregular", "outing", "records", "evidence", "settings"];
   var currentScreenName = "home";
   function showScreen(name) {
     currentScreenName = name;
@@ -1682,6 +1892,7 @@
     });
     if (name === "home") renderHome();
     if (name === "irregular") renderIrregular();
+    if (name === "outing") renderOuting();
     if (name === "records") renderRecords();
     if (name === "evidence") renderEvidence();
     if (name === "settings") renderSettings();
@@ -1692,6 +1903,7 @@
   function rerenderCurrentScreen() {
     if (currentScreenName === "home") renderHome();
     else if (currentScreenName === "irregular") renderIrregular();
+    else if (currentScreenName === "outing") renderOuting();
     else if (currentScreenName === "records") renderRecords();
     else if (currentScreenName === "evidence") renderEvidence();
     else if (currentScreenName === "settings") renderSettings();
@@ -1771,6 +1983,72 @@
       document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     }
     renderTimeChart(now);
+    renderMilestoneCard();
+  }
+  // 累計のマイルストーン。日々の「今日の合計」とは別に、うまれてからの積み上げを見せる。
+  // ホームのいちばん下に置くのは、スクロールしきったところで目に入るのがちょうどいいため
+  // (次の授乳の判断には使わない情報なので、上に置くと邪魔になる)。
+  function renderMilestoneCard() {
+    var card = document.getElementById("milestone-card");
+    var listEl = document.getElementById("milestone-list");
+    var noteEl = document.getElementById("milestone-note");
+    var stats = calcMilestones(getMergedFeedLogs());
+    // 記録が1件もないうちは、0が並ぶだけで意味がないのでカードごと隠す
+    if (stats.feedCount === 0) {
+      card.hidden = true;
+      return;
+    }
+    var ageDays = getAgeDays();
+    var items = [
+      {
+        icon: "🍼",
+        value: "あげたミルク " + formatTotalVolume(stats.totalMl),
+        // Lの数字だけではピンとこないので、目に見える物に置き換える
+        label: stats.bottleCount >= 1
+          ? "500mlのペットボトル約" + stats.bottleCount + "本ぶんだよ"
+          : "ここから積み上がっていくよ"
+      },
+      // 記録はパパの端末ぶんもマージされた「家族の合計」。はるたん一人の数字ではない。
+      { icon: "🤱", value: "授乳 " + stats.feedCount + "回", label: "ふたりで積み上げてきたぶんだよ" }
+    ];
+    if (stats.nightCount > 0) {
+      items.push({
+        icon: "🌙",
+        value: "夜中の授乳 " + stats.nightCount + "回",
+        label: "夜22時〜朝6時のがんばりだね"
+      });
+    }
+    if (typeof ageDays === "number" && ageDays >= 0) {
+      items.push({
+        icon: "🌸",
+        value: "さくらたんと " + ageDays + "日",
+        label: "うまれた日からきょうまで"
+      });
+    }
+    listEl.innerHTML = "";
+    items.forEach(function (item) {
+      var li = document.createElement("li");
+      li.className = "milestone-item";
+      var icon = document.createElement("span");
+      icon.className = "ms-icon";
+      icon.textContent = item.icon;
+      var body = document.createElement("div");
+      body.className = "ms-body";
+      var value = document.createElement("span");
+      value.className = "ms-value";
+      value.textContent = item.value;
+      var label = document.createElement("span");
+      label.className = "ms-label";
+      label.textContent = item.label;
+      body.appendChild(value);
+      body.appendChild(label);
+      li.appendChild(icon);
+      li.appendChild(body);
+      listEl.appendChild(li);
+    });
+    // 記録が欠けている期間ぶんは数えられない。実際より少なく出ることを正直に書いておく。
+    noteEl.textContent = "アプリとぴよログに残っている記録ぶんの合計だよ";
+    card.hidden = false;
   }
   // home-banner-slotには夜間分の記録漏れ通知(機能既存)と、ぐずり時間帯の予告(機能2)の
   // どちらか一方だけを出す。時間帯が重ならない(朝5-10時 / 14時台)ので競合はしない。
@@ -2274,6 +2552,127 @@
     showScreen("home");
   }
   /* ---------- 記録一覧 ---------- */
+  /* ---------- おでかけ画面 ---------- */
+  // 選んだ外出の長さ(分)。画面を離れても保つので、戻ってきたときに選び直さなくていい。
+  var outingDurationMinutes = null;
+  function renderOuting() {
+    renderOutingOptions();
+    var resultCard = document.getElementById("outing-result");
+    var packCard = document.getElementById("outing-pack");
+    if (outingDurationMinutes === null) {
+      resultCard.hidden = true;
+      packCard.hidden = true;
+      return;
+    }
+    var perFeed = getPerFeedMl();
+    var headlineEl = document.getElementById("outing-headline");
+    var timesEl = document.getElementById("outing-times");
+    var beforeEl = document.getElementById("outing-before-leave");
+    resultCard.hidden = false;
+    // 目安量が出せない(誕生日も体重もない)ときは、持ち物の数を作れない
+    if (perFeed <= 0) {
+      setMessageWithLineBreaks(headlineEl, "まだ目安が出せないよ");
+      timesEl.textContent = "設定でさくらたんの誕生日か体重を入れてね";
+      beforeEl.hidden = true;
+      packCard.hidden = true;
+      return;
+    }
+    var info = getCycleInfo();
+    var plan = calcOutingPlan(
+      getLastFeedLog(), perFeed, info.bucketCycles, info.cycleMinutes, new Date(), outingDurationMinutes);
+    if (plan.feeds.length === 0) {
+      // 出発前の1回で足りるケースと、そもそも来ないケースを言い分ける。
+      // 同じ文言にすると「出る前に1回」の案内と噛み合わず読み手が混乱する。
+      setMessageWithLineBreaks(headlineEl,
+        plan.beforeLeave ? "出る前の1回でいけそうだよ" : "授乳は、たぶんこないよ");
+      timesEl.textContent = "1回分だけ持っていくと安心だよ";
+    } else {
+      setMessageWithLineBreaks(headlineEl, "出先で" + plan.feeds.length + "回きそうだよ");
+      timesEl.textContent = formatOutingTimes(plan.feeds);
+    }
+    beforeEl.hidden = plan.beforeLeave === null;
+    if (plan.beforeLeave) {
+      setMessageWithLineBreaks(beforeEl,
+        "出る前に1回、飲ませていこう。" + formatTime(plan.beforeLeave) + "ごろのぶんだよ");
+    }
+    renderOutingPackList(plan, perFeed);
+    packCard.hidden = false;
+  }
+  // 外出の長さボタン。選択中は is-active で塗る。
+  function renderOutingOptions() {
+    var wrap = document.getElementById("outing-options");
+    wrap.innerHTML = "";
+    OUTING_DURATION_OPTIONS.forEach(function (opt) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-ghost" + (outingDurationMinutes === opt.minutes ? " is-active" : "");
+      btn.textContent = opt.label;
+      btn.addEventListener("click", function () {
+        outingDurationMinutes = opt.minutes;
+        renderOuting();
+      });
+      wrap.appendChild(btn);
+    });
+  }
+  // 1回なら「16:20ごろ」、2回なら「16:20ごろと18:40ごろ」、3回以上は読点でつなぐ。
+  function formatOutingTimes(feeds) {
+    var labels = feeds.map(function (f) { return formatTime(f.time) + "ごろ"; });
+    if (labels.length <= 2) return labels.join("と");
+    return labels.join("、");
+  }
+  // 持ち物は「数」で出す。おでかけは調乳ずみのアイクレオ紙パックを持ち出す運用なので、
+  // 家での調乳とはまったく別。粉のスプーン杯数・哺乳びん・お湯はここには出さない。
+  function renderOutingPackList(plan, perFeedMl) {
+    var listEl = document.getElementById("outing-pack-list");
+    // 1回の目安量が紙パック1本ぶんを超えるなら、その回は2本使う
+    var packsPerFeed = Math.max(1, Math.ceil(roundToUnit(perFeedMl) / OUTING_PACK_ML));
+    var totalPacks = packsPerFeed * plan.carryFeeds;
+    var nipples = Math.min(plan.carryFeeds, OUTING_MAX_NIPPLES);
+    var items = [
+      {
+        icon: "🥤",
+        name: "アイクレオの紙パック " + totalPacks + "本",
+        sub: packsPerFeed > 1
+          ? "1回に" + packsPerFeed + "本使うから、" + plan.carryFeeds + "回ぶんだよ"
+          : "1本" + OUTING_PACK_ML + "ml。" + plan.carryFeeds + "回ぶんだよ"
+      },
+      {
+        icon: "👶",
+        name: "紙パック用の乳首 " + nipples + "個",
+        sub: plan.carryFeeds > OUTING_MAX_NIPPLES
+          ? plan.carryFeeds + "回ぶんあるから、途中で洗えるところを探しておこう"
+          : "出先では洗えないから、使う回数ぶんあると安心だよ"
+      },
+      { icon: "🧷", name: "おむつ " + plan.diaperCount + "枚", sub: "おしりふきもいっしょにね" },
+      {
+        icon: "👕",
+        name: "着替え " + (plan.carryFeeds >= OUTING_EXTRA_CLOTHES_FEEDS ? "2枚" : "1枚"),
+        sub: "吐き戻しとうんち漏れのぶん"
+      },
+      { icon: "🌸", name: "ガーゼとビニール袋", sub: "よごれものを入れるぶんもね" }
+    ];
+    listEl.innerHTML = "";
+    items.forEach(function (item) {
+      var li = document.createElement("li");
+      li.className = "pack-item";
+      var icon = document.createElement("span");
+      icon.className = "pack-icon";
+      icon.textContent = item.icon;
+      var body = document.createElement("div");
+      body.className = "pack-body";
+      var name = document.createElement("span");
+      name.className = "pack-name";
+      name.textContent = item.name;
+      var sub = document.createElement("span");
+      sub.className = "pack-sub";
+      sub.textContent = item.sub;
+      body.appendChild(name);
+      body.appendChild(sub);
+      li.appendChild(icon);
+      li.appendChild(body);
+      listEl.appendChild(li);
+    });
+  }
   function renderRecords() {
     var listEl = document.getElementById("records-list");
     listEl.innerHTML = "";
@@ -2360,28 +2759,28 @@
     item.innerHTML =
       '<div class="rec-main"><span class="rec-time">' + time + tag + '</span>' +
       '<span class="rec-ml">' + log.ml + "ml</span></div>";
-    // 配信データ由来の行(remote:true)はlocalStorageに実体が無く、修正・削除が機能しないため
-    // ボタンを出さない(バッジだけで区別する)。
-    if (!log.remote) {
-      var actions = document.createElement("div");
-      actions.className = "rec-actions";
-      var editBtn = document.createElement("button");
-      editBtn.textContent = "修正";
-      editBtn.addEventListener("click", function () { toggleEditForm(item, log); });
-      var delBtn = document.createElement("button");
-      delBtn.className = "rec-delete";
-      delBtn.textContent = pendingDeleteIds[log.id] ? "本当に削除？" : "削除";
-      delBtn.addEventListener("click", function () { handleDeleteClick(log.id); });
-      actions.appendChild(editBtn);
-      actions.appendChild(delBtn);
-      item.appendChild(actions);
-    }
+    // 配信データ由来の行(remote:true)にもボタンを出す。localStorageに実体は無いが、
+    // 削除記録(tombstone)で消せるし、修正はこの端末の記録として作り直せる。
+    // ボタンを出さないでいると、ほかの端末が配信した記録を直す手段がなくなり詰む。
+    var actions = document.createElement("div");
+    actions.className = "rec-actions";
+    var editBtn = document.createElement("button");
+    editBtn.textContent = "修正";
+    editBtn.addEventListener("click", function () { toggleEditForm(item, log); });
+    var delBtn = document.createElement("button");
+    delBtn.className = "rec-delete";
+    delBtn.textContent = pendingDeleteIds[log.id] ? "本当に削除？" : "削除";
+    delBtn.addEventListener("click", function () { handleDeleteClick(log); });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    item.appendChild(actions);
     return item;
   }
-  function handleDeleteClick(id) {
+  function handleDeleteClick(log) {
+    var id = log.id;
     if (pendingDeleteIds[id]) {
       delete pendingDeleteIds[id];
-      deleteFeedLog(id);
+      deleteFeedLog(log);
       showToast("削除したよ");
       renderRecords();
       return;
@@ -2413,7 +2812,7 @@
       var newTime = form.querySelector(".edit-time").value;
       var newMl = parseInt(form.querySelector(".edit-ml").value, 10);
       if (!newTime || isNaN(newMl)) { showToast("時刻と量を確認してね"); return; }
-      updateFeedLog(log.id, { at: log.at.slice(0, 10) + "T" + newTime, ml: newMl });
+      updateFeedLog(log, { at: log.at.slice(0, 10) + "T" + newTime, ml: newMl });
       showToast("修正したよ");
       renderRecords();
     });
@@ -2877,6 +3276,8 @@
       setToggleButtonPressed(manualPoopToggleBtn, manualAddPoop);
     });
     document.getElementById("btn-go-irregular").addEventListener("click", function () { showScreen("irregular"); });
+    document.getElementById("btn-go-outing").addEventListener("click", function () { showScreen("outing"); });
+    document.getElementById("outing-back-top").addEventListener("click", function () { showScreen("home"); });
     document.getElementById("irregular-back-top").addEventListener("click", function () { showScreen("home"); });
     document.getElementById("irregular-wait-btn").addEventListener("click", function () { showScreen("home"); });
     document.getElementById("irregular-give-btn").addEventListener("click", openIrregularFeedPanel);
