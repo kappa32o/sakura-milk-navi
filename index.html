@@ -1454,9 +1454,15 @@
     });
   }
   // GET用(配信データの取得): ボディなし、あいことばのヘッダのみ付ける。
+  // cache:"no-store" は必須。これがないとiOS Safariが応答をキャッシュし、
+  // 何度ひらいても同じ古い記録が返り続ける(はるたんの端末で実際にこれが起きた。
+  // Worker上は174件あるのに、初回に取得した161件を表示し続けていた)。
+  // Worker側もCache-Control: no-storeを返すようにしたが、すでに端末に残っている
+  // キャッシュを確実に迂回させるため、こちらでも指定しておく。
   function pushFetchGet(path) {
     return fetch(PUSH_SERVER_URL + path, {
       method: "GET",
+      cache: "no-store",
       headers: { "X-Sync-Secret": getPushSecret() }
     });
   }
