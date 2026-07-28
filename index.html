@@ -1587,6 +1587,19 @@
       return !deleted.some(function (d) { return isSameFeedEntry(l, d); });
     });
   }
+  // おむつの残りの基準は端末ごとに入れ直す。あとから入れたほうが実際に数えた結果なので、
+  // baseAt が新しいほうを採る(last-write-wins)。記録のような件数のマージではない。
+  function getMergedDiaperStock() {
+    var local = state.diaperStock;
+    var remote = (remoteHistory && remoteHistory.diaperStock) || null;
+    if (!local) return remote;
+    if (!remote) return local;
+    var localMs = new Date(local.baseAt).getTime();
+    var remoteMs = new Date(remote.baseAt).getTime();
+    if (isNaN(remoteMs)) return local;
+    if (isNaN(localMs)) return remote;
+    return remoteMs > localMs ? remote : local;
+  }
   function getMergedPees() {
     return mergeTimeEvents(state.pees, remoteHistory ? remoteHistory.pees : null);
   }
@@ -1651,6 +1664,15 @@
     if (at === null || !isFinite(ml) || ml < 0 || ml > 2000) return null;
     return { at: at, ml: ml };
   }
+  // おむつの残りの基準。Worker側も同じ形式(baseAt=分まで / baseCount=0〜999)で検証するので、
+  // 不正なら送らない(nullにする)。1件の不正で配信全体が400で落ちるのを避ける。
+  function normalizePublishDiaperStock(stock) {
+    if (!stock) return null;
+    var at = normalizePublishAt(stock.baseAt);
+    var count = Math.round(Number(stock.baseCount));
+    if (at === null || !isFinite(count) || count < 0 || count > DIAPER_MAX_COUNT) return null;
+    return { baseAt: at, baseCount: count };
+  }
   function normalizePublishWeight(entry) {
     if (!entry || typeof entry.date !== "string" || !PUBLISH_DATE_PATTERN.test(entry.date)) return null;
     var grams = Math.round(Number(entry.grams));
@@ -1681,7 +1703,9 @@
       weights: dropNulls(getMergedWeightHistory().map(normalizePublishWeight)),
       // 消した記録は「消したという事実」も配信する。これがないと、他の端末や
       // 取得し直した配信データとマージされたときに復活してしまう。
-      deleted: limitToNewest(dropNulls(getMergedDeletedFeeds().map(normalizePublishFeed)).filter(inRangeEntry), atOfEntry)
+      deleted: limitToNewest(dropNulls(getMergedDeletedFeeds().map(normalizePublishFeed)).filter(inRangeEntry), atOfEntry),
+      // おむつの残りの基準。マージ結果を送らないと、他の端末が入れた新しい基準を消してしまう。
+      diaperStock: normalizePublishDiaperStock(getMergedDiaperStock())
     };
   }
   // 自動配信してよいか: あいことば保存済み かつ Worker側の状態が確定している(成功 or 404未登録)ときだけ。
@@ -2111,7 +2135,7 @@
     var daysEl = document.getElementById("diaper-days");
     var warnEl = document.getElementById("diaper-warn");
     var setBtn = document.getElementById("diaper-set");
-    var status = calcDiaperStatus(state.diaperStock, getMergedPees(), getMergedPoops(), new Date());
+    var status = calcDiaperStatus(getMergedDiaperStock(), getMergedPees(), getMergedPoops(), new Date());
     if (!status) {
       countEl.textContent = "まだ数えていないよ";
       daysEl.textContent = "いま何枚あるか入れてみてね";
@@ -2140,7 +2164,7 @@
     var form = document.getElementById("diaper-form");
     var input = document.getElementById("diaper-input");
     if (!form.hidden) { form.hidden = true; return; }
-    var status = calcDiaperStatus(state.diaperStock, getMergedPees(), getMergedPoops(), new Date());
+    var status = calcDiaperStatus(getMergedDiaperStock(), getMergedPees(), getMergedPoops(), new Date());
     input.value = status ? status.remaining : "";
     form.hidden = false;
     input.focus();
@@ -2156,6 +2180,8 @@
       diaperStock: { baseAt: toLocalISO(new Date()), baseCount: value }
     });
     saveState();
+    // 家族で共有する。配信しないと、パパの端末では古い枚数のままになる。
+    scheduleAutoPublishHistory();
     document.getElementById("diaper-form").hidden = true;
     showToast("おむつの残りを覚えたよ");
     renderDiaperCard();
