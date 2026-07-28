@@ -139,6 +139,7 @@
   .pack-item .pack-body { display: flex; flex-direction: column; gap: 2px; }
   .pack-item .pack-name { font-size: 0.95rem; font-weight: 800; line-height: 1.35; }
   .pack-item .pack-sub { font-size: 0.76rem; color: var(--text-muted); line-height: 1.45; }
+  .diaper-count { margin: 2px 0 4px; font-size: 1.7rem; font-weight: 800; color: var(--primary-dark); line-height: 1.2; }
   .milestone-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
   .milestone-item { display: flex; align-items: center; gap: 12px; }
   .milestone-item .ms-icon { font-size: 1.34rem; flex-shrink: 0; width: 30px; text-align: center; }
@@ -274,6 +275,21 @@
         <p class="timechart-summary" id="timechart-summary"></p>
         <div class="timechart-svg-wrap" id="timechart-svg"></div>
         <div id="timechart-rows"></div>
+      </div>
+      <div class="card" id="diaper-card">
+        <p class="eyebrow">おむつの残り</p>
+        <p class="diaper-count" id="diaper-count"></p>
+        <p class="body-text" id="diaper-days" style="margin:0"></p>
+        <p class="progress-warn" id="diaper-warn" hidden></p>
+        <div id="diaper-form" hidden style="margin-top:14px">
+          <div class="field"><label for="diaper-input">いま何枚ある？</label>
+            <input type="number" id="diaper-input" min="0" step="1" inputmode="numeric"></div>
+          <div class="feed-panel-actions">
+            <button class="btn btn-ghost" id="diaper-cancel">やめる</button>
+            <button class="btn btn-primary" id="diaper-save">これでOK</button>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-block" id="diaper-set" style="margin-top:14px"></button>
       </div>
       <div class="card" id="milestone-card" hidden>
         <p class="eyebrow">これまでのこと</p>
@@ -572,6 +588,13 @@
   var OUTING_MAX_NIPPLES = 3;
   // 着替えを2枚にする授乳回数のしきい値(それだけ長い外出なら替えは1枚では足りない)。
   var OUTING_EXTRA_CLOTHES_FEEDS = 3;
+  // おむつの残り枚数の簡易チェック。おしっこ・うんちの記録から減らしていく。
+  // 記録は任意入力なので実数とは必ずずれる。「残りの枚数を入れなおす」で直せる前提の目安で、
+  // ぴったり合わせにいく機能ではない。
+  var DIAPER_MERGE_MINUTES = 5;    // この時間内のおしっこ＋うんちは同じ1枚とみなす
+  var DIAPER_RATE_WINDOW_DAYS = 7; // 1日あたりの枚数を見る期間
+  var DIAPER_LOW_DAYS = 3;         // 残りがこれを切ったら買い足しどきと伝える
+  var DIAPER_MAX_COUNT = 999;      // 入力の上限(打ち間違い対策)
   // 累計のマイルストーン: 総量をペットボトル(500ml)換算で添える。
   // Lの数字だけではピンとこないので、目に見える物に置き換えて実感につなげる。
   var MILESTONE_BOTTLE_ML = 500;
@@ -874,6 +897,53 @@
       diaperCount: carryFeeds + OUTING_SPARE_DIAPERS
     };
   }
+  // おむつ替えの枚数を数える。おしっことうんちが近い時刻に並んでいれば同じ1枚とみなす。
+  // 累計のマイルストーン(calcMilestones)は単純な足し算だが、あちらは「がんばりの回数」なので
+  // 数えかたが違ってよい。こちらは残り枚数なので、実際に使った枚数に近いほうを採る。
+  function countDiaperChanges(pees, poops, sinceMs) {
+    var times = (pees || []).concat(poops || [])
+      .map(function (t) { return new Date(t).getTime(); })
+      .filter(function (t) { return !isNaN(t) && t >= sinceMs; })
+      .sort(function (a, b) { return a - b; });
+    var count = 0;
+    var last = null;
+    times.forEach(function (t) {
+      if (last === null || t - last > DIAPER_MERGE_MINUTES * 60000) {
+        count += 1;
+        last = t;
+      }
+    });
+    return count;
+  }
+  // 1日あたりの使用枚数。記録が実際にカバーしている日数で割る。
+  // 期間(7日)で単純に割ると、記録が2〜3日ぶんしかないときに少なく見積もってしまい、
+  // 「あと何日もつか」を長めに出す＝足りなくなる側に外れる。
+  function calcDiaperPerDay(pees, poops, now) {
+    var sinceMs = now.getTime() - DIAPER_RATE_WINDOW_DAYS * 86400000;
+    var times = (pees || []).concat(poops || [])
+      .map(function (t) { return new Date(t).getTime(); })
+      .filter(function (t) { return !isNaN(t) && t >= sinceMs && t <= now.getTime(); })
+      .sort(function (a, b) { return a - b; });
+    if (times.length < 2) return null;
+    var spanDays = (times[times.length - 1] - times[0]) / 86400000;
+    if (spanDays < 0.5) return null; // 半日ぶんも無いと1日あたりに直せない
+    return countDiaperChanges(pees, poops, times[0]) / spanDays;
+  }
+  // おむつの残り。基準(baseAtの時点でbaseCount枚)からの消費を引く。
+  function calcDiaperStatus(stock, pees, poops, now) {
+    if (!stock || !stock.baseAt || typeof stock.baseCount !== "number") return null;
+    var baseMs = new Date(stock.baseAt).getTime();
+    if (isNaN(baseMs)) return null;
+    var used = countDiaperChanges(pees, poops, baseMs);
+    var remaining = Math.max(0, stock.baseCount - used);
+    var perDay = calcDiaperPerDay(pees, poops, now);
+    return {
+      remaining: remaining,
+      used: used,
+      perDay: perDay,
+      daysLeft: (perDay && perDay > 0) ? remaining / perDay : null
+    };
+  }
   // 累計のマイルストーン。記録があるぶんの合計を返す(記録が欠けている期間は数えられない)。
   function calcMilestones(feedLogs, pees, poops) {
     var totalMl = 0;
@@ -1041,7 +1111,9 @@
       poops: [],
       deletedFeeds: [],
       // 削除記録を打ち消したぶん。詳しくは reviveFeedEntry() を参照。
-      revivedFeeds: []
+      revivedFeeds: [],
+      // おむつの残り枚数の基準 {baseAt, baseCount}。この端末だけで持つ(配信しない)。
+      diaperStock: null
     };
   }
   function loadState() {
@@ -1071,7 +1143,9 @@
         pees: Array.isArray(parsed.pees) ? parsed.pees : [],
         poops: Array.isArray(parsed.poops) ? parsed.poops : [],
         deletedFeeds: Array.isArray(parsed.deletedFeeds) ? parsed.deletedFeeds : [],
-        revivedFeeds: Array.isArray(parsed.revivedFeeds) ? parsed.revivedFeeds : []
+        revivedFeeds: Array.isArray(parsed.revivedFeeds) ? parsed.revivedFeeds : [],
+        diaperStock: (parsed.diaperStock && typeof parsed.diaperStock.baseCount === "number")
+          ? parsed.diaperStock : null
       };
     } catch (err) {
       console.error("[sakura-milk-navi] 状態の読み込みに失敗しました。初期状態を使用します。", err);
@@ -2026,7 +2100,65 @@
       document.getElementById("feed-value").textContent = feedPanelMl + "ml";
     }
     renderTimeChart(now);
+    renderDiaperCard();
     renderMilestoneCard();
+  }
+  // おむつの残り枚数。記録から減らすだけの簡易版で、ずれたら入れなおしてもらう。
+  // 基準(diaperStock)はこの端末だけに持ち、配信しない。
+  // おむつ替えの記録そのものはマージ済みを見るので、パパの端末で付けたぶんも減る。
+  function renderDiaperCard() {
+    var countEl = document.getElementById("diaper-count");
+    var daysEl = document.getElementById("diaper-days");
+    var warnEl = document.getElementById("diaper-warn");
+    var setBtn = document.getElementById("diaper-set");
+    var status = calcDiaperStatus(state.diaperStock, getMergedPees(), getMergedPoops(), new Date());
+    if (!status) {
+      countEl.textContent = "まだ数えていないよ";
+      daysEl.textContent = "いま何枚あるか入れてみてね";
+      warnEl.hidden = true;
+      setBtn.textContent = "残りの枚数を入れる";
+      return;
+    }
+    countEl.textContent = "残り " + status.remaining + "枚くらい";
+    if (status.daysLeft === null) {
+      daysEl.textContent = "記録がたまると、あと何日ぶんか出るよ";
+    } else if (status.daysLeft < 1) {
+      daysEl.textContent = "きょうのぶんで終わりそうだよ";
+    } else {
+      daysEl.textContent = "いまのペースだと、あと" + Math.floor(status.daysLeft) + "日ぶんくらい";
+    }
+    var isLow = status.remaining === 0
+      || (status.daysLeft !== null && status.daysLeft < DIAPER_LOW_DAYS);
+    warnEl.hidden = !isLow;
+    if (isLow) {
+      // 1文=1行。買い足しはみつひこに頼めばいい、と分かる書き方にする。
+      setMessageWithLineBreaks(warnEl, "そろそろ買い足しどきだよ。みつひこに頼んでね");
+    }
+    setBtn.textContent = "残りの枚数を入れなおす";
+  }
+  function openDiaperForm() {
+    var form = document.getElementById("diaper-form");
+    var input = document.getElementById("diaper-input");
+    if (!form.hidden) { form.hidden = true; return; }
+    var status = calcDiaperStatus(state.diaperStock, getMergedPees(), getMergedPoops(), new Date());
+    input.value = status ? status.remaining : "";
+    form.hidden = false;
+    input.focus();
+  }
+  function saveDiaperCount() {
+    var value = parseInt(document.getElementById("diaper-input").value, 10);
+    if (isNaN(value) || value < 0 || value > DIAPER_MAX_COUNT) {
+      showToast("0〜" + DIAPER_MAX_COUNT + "枚で入れてね");
+      return;
+    }
+    // いまを基準にして数えなおす。これまでの消費は基準に含まれているので持ち越さない。
+    state = Object.assign({}, state, {
+      diaperStock: { baseAt: toLocalISO(new Date()), baseCount: value }
+    });
+    saveState();
+    document.getElementById("diaper-form").hidden = true;
+    showToast("おむつの残りを覚えたよ");
+    renderDiaperCard();
   }
   // 累計のマイルストーン。日々の「今日の合計」とは別に、うまれてからの積み上げを見せる。
   // ホームのいちばん下に置くのは、スクロールしきったところで目に入るのがちょうどいいため
@@ -3336,6 +3468,11 @@
       setToggleButtonPressed(manualPoopToggleBtn, manualAddPoop);
     });
     document.getElementById("btn-go-irregular").addEventListener("click", function () { showScreen("irregular"); });
+    document.getElementById("diaper-set").addEventListener("click", openDiaperForm);
+    document.getElementById("diaper-cancel").addEventListener("click", function () {
+      document.getElementById("diaper-form").hidden = true;
+    });
+    document.getElementById("diaper-save").addEventListener("click", saveDiaperCount);
     document.getElementById("btn-go-outing").addEventListener("click", function () { showScreen("outing"); });
     document.getElementById("outing-back-top").addEventListener("click", function () { showScreen("home"); });
     document.getElementById("irregular-back-top").addEventListener("click", function () { showScreen("home"); });
