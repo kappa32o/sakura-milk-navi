@@ -146,13 +146,11 @@
   .milestone-item .ms-body { display: flex; flex-direction: column; gap: 1px; }
   .milestone-item .ms-value { font-size: 1.1rem; font-weight: 800; color: var(--primary-dark); line-height: 1.3; }
   .milestone-item .ms-label { font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; }
-  .weaning-headline { margin: 4px 0 0; font-size: 1.1rem; font-weight: 800; color: var(--primary-dark); }
-  .medal-row { list-style: none; display: flex; gap: 6px; margin: 4px 0 0; padding: 0; }
-  .medal-item { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: var(--radius-sm); background: var(--surface-2); opacity: 0.4; filter: grayscale(1); }
-  .medal-item.is-unlocked { opacity: 1; filter: none; background: var(--primary-soft); }
-  .medal-item .medal-icon { font-size: 1.28rem; line-height: 1; }
-  .medal-item .medal-pct { font-size: 0.62rem; font-weight: 700; color: var(--text-muted); }
-  .medal-item.is-unlocked .medal-pct { color: var(--primary-dark); }
+  .growth-display { display: flex; align-items: center; gap: 14px; }
+  .growth-animal { font-size: 2.7rem; line-height: 1; flex-shrink: 0; }
+  .growth-body { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .growth-stage-label { margin: 0; font-size: 0.98rem; font-weight: 800; color: var(--primary-dark); }
+  .growth-hint { margin: 0; font-size: 0.72rem; color: var(--text-muted); }
   #weaning-progress { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px dashed var(--surface-2); }
   .screen-title { margin: 6px 16px 14px; font-size: 1.24rem; font-weight: 800; }
   .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; font-size: 0.92rem; font-weight: 700; color: var(--text); }
@@ -302,10 +300,14 @@
       <div class="card" id="milestone-card" hidden>
         <p class="eyebrow">これまでのこと</p>
         <div id="weaning-progress" hidden>
-          <p class="weaning-headline" id="weaning-headline">ミルク卒業まで、だいたい0%</p>
-          <div class="progress-track"><div class="progress-fill" id="weaning-fill" style="width:0%"></div></div>
-          <ul class="medal-row" id="medal-row"></ul>
-          <p class="field-note" id="weaning-note"></p>
+          <div class="growth-display">
+            <span class="growth-animal" id="growth-animal">🥚</span>
+            <div class="growth-body">
+              <p class="growth-stage-label" id="growth-stage-label"></p>
+              <div class="progress-track"><div class="progress-fill" id="weaning-fill" style="width:0%"></div></div>
+              <p class="growth-hint">🍼 のんだミルクの量で育つよ</p>
+            </div>
+          </div>
         </div>
         <ul class="milestone-list" id="milestone-list"></ul>
         <p class="note" id="milestone-note"></p>
@@ -614,20 +616,22 @@
   var MILESTONE_BOTTLE_ML = 500;
   // mlのまま出すか、Lに丸めるかの境目。
   var MILESTONE_LITER_THRESHOLD_ML = 1000;
-  // ミルク卒業までのメダル: 「これまでに実際に飲んだ量」÷「いまのペースが卒業予定日まで
+  // ミルクを卒業していく進み具合: 「これまでに実際に飲んだ量」÷「いまのペースが卒業予定日まで
   // 続くと仮定した総量」を%にする。卒業予定日そのものは個人差が大きいので、
   // 厚生労働省「授乳・離乳の支援ガイド」の目安(離乳の完了は生後12〜18か月ごろ)を使った
   // ざっくりとした計算にとどめる。MONTH_PARAMSとは別物(あちらは今日の目安量の警告に使う実務値)。
+  // 数字や説明文としては出さず、ひよこが育つ見た目(GROWTH_STAGES)だけで表現する。
   var WEANING_GRADUATION_DAYS = 540; // 生後18ヶ月ごろ
   var WEANING_RECENT_AVG_WINDOW_DAYS = 14; // 直近の実測ペースを見る期間
-  var WEANING_TIER_SEEN_KEY = "sakura-milk-navi-weaning-tier-seen";
-  var WEANING_MEDAL_TIERS = [
-    { percent: 10, icon: "🥉" },
-    { percent: 25, icon: "🥉" },
-    { percent: 50, icon: "🥈" },
-    { percent: 75, icon: "🥈" },
-    { percent: 90, icon: "🥇" },
-    { percent: 100, icon: "🏅" }
+  var WEANING_STAGE_SEEN_KEY = "sakura-milk-navi-weaning-tier-seen";
+  // メダルではなく、ひよこが育っていく見た目にする(2026-07-30、ユーザー指定)。
+  // 進捗%はcalcWeaningProgressのまま、表示だけをこの5段階の見た目に対応させる。
+  var GROWTH_STAGES = [
+    { minPercent: 0,   icon: "🥚", label: "たまご" },
+    { minPercent: 15,  icon: "🐣", label: "うまれたて" },
+    { minPercent: 40,  icon: "🐤", label: "よちよち" },
+    { minPercent: 70,  icon: "🐥", label: "げんき" },
+    { minPercent: 100, icon: "🐔", label: "りっぱ" }
   ];
   var DEFAULT_SETTINGS = {
     birthDate: "2026-07-09",
@@ -2246,8 +2250,16 @@
     showToast("おむつの残りを覚えたよ");
     renderDiaperCard();
   }
-  // ミルク卒業までのメダル。progressがnull(直近の記録ペースが分からない)のときは隠す。
-  // 新しい節目を超えたときだけ祝うトーストを出す(初回描画でいきなり祝わないようにする)。
+  // progressの%から見た目の段階を選ぶ。GROWTH_STAGESはminPercent昇順の前提。
+  function getGrowthStage(percent) {
+    var stage = GROWTH_STAGES[0];
+    GROWTH_STAGES.forEach(function (s) {
+      if (percent >= s.minPercent) stage = s;
+    });
+    return stage;
+  }
+  // ひよこが育っていく見た目。progressがnull(直近の記録ペースが分からない)のときは隠す。
+  // 数字や説明文は出さず、見た目(絵文字＋バー)だけで伝える(2026-07-30、ユーザー指定)。
   function renderWeaningProgress(totalMl, feedLogs, ageDays, now) {
     var wrap = document.getElementById("weaning-progress");
     var progress = calcWeaningProgress(totalMl, feedLogs, ageDays, now);
@@ -2255,40 +2267,19 @@
       wrap.hidden = true;
       return;
     }
-    document.getElementById("weaning-headline").textContent =
-      "ミルク卒業まで、だいたい" + progress.percent + "%";
+    var stage = getGrowthStage(progress.percent);
+    document.getElementById("growth-animal").textContent = stage.icon;
+    document.getElementById("growth-stage-label").textContent = stage.label;
     document.getElementById("weaning-fill").style.width = progress.percent + "%";
-    var rowEl = document.getElementById("medal-row");
-    rowEl.innerHTML = "";
-    WEANING_MEDAL_TIERS.forEach(function (tier) {
-      var li = document.createElement("li");
-      li.className = "medal-item" + (progress.percent >= tier.percent ? " is-unlocked" : "");
-      var icon = document.createElement("span");
-      icon.className = "medal-icon";
-      icon.textContent = tier.icon;
-      var pct = document.createElement("span");
-      pct.className = "medal-pct";
-      pct.textContent = tier.percent + "%";
-      li.appendChild(icon);
-      li.appendChild(pct);
-      rowEl.appendChild(li);
-    });
-    // 1文=1行。「気にしすぎなくて大丈夫」を添えて、遅れている・進んでいるという
-    // プレッシャーにならないようにする(はるたん向け文言のルール §8)。
-    setMessageWithLineBreaks(document.getElementById("weaning-note"),
-      "厚生労働省の目安をもとにした、ざっくりの計算だよ。個人差があるから気にしすぎなくて大丈夫");
     wrap.hidden = false;
-    maybeCelebrateWeaningTier(progress.percent);
+    maybeCelebrateGrowthStage(stage);
   }
-  function maybeCelebrateWeaningTier(percent) {
-    var reached = WEANING_MEDAL_TIERS.filter(function (t) { return percent >= t.percent; });
-    if (reached.length === 0) return;
-    var latest = reached[reached.length - 1].percent;
-    var seen = parseInt(localStorage.getItem(WEANING_TIER_SEEN_KEY) || "0", 10);
-    if (latest > seen) {
-      // 初回起動時に既に達成済みの節目でいきなり祝わない(seen===0のときはスキップ)
-      if (seen > 0) showToast("🎉 ミルク卒業メダル" + latest + "%を達成したよ");
-      localStorage.setItem(WEANING_TIER_SEEN_KEY, String(latest));
+  // 段階が変わったときだけ祝う。初回描画(seenが空)でいきなり祝わないようにする。
+  function maybeCelebrateGrowthStage(stage) {
+    var seen = localStorage.getItem(WEANING_STAGE_SEEN_KEY) || "";
+    if (stage.label !== seen) {
+      if (seen !== "") showToast("🎉 " + stage.icon + " " + stage.label + " になったよ");
+      localStorage.setItem(WEANING_STAGE_SEEN_KEY, stage.label);
     }
   }
   // 累計のマイルストーン。日々の「今日の合計」とは別に、うまれてからの積み上げを見せる。
