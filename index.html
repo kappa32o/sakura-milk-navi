@@ -652,9 +652,7 @@
     weightGrams: null,
     cycleMinutes: 180,
     feedsPerDay: 8,
-    papaMessages: DEFAULT_PAPA_MESSAGES.slice(),
-    // 1回の目安を自動計算ではなく直接決めたいときの上書き値。nullなら自動計算のまま。
-    perFeedOverrideMl: null
+    papaMessages: DEFAULT_PAPA_MESSAGES.slice()
   };
   /* ---------- 純関数: 計算ロジック ---------- */
   function roundToUnit(value, unit) {
@@ -1192,8 +1190,11 @@
       deletedFeeds: [],
       // 削除記録を打ち消したぶん。詳しくは reviveFeedEntry() を参照。
       revivedFeeds: [],
-      // おむつの残り枚数の基準 {baseAt, baseCount}。この端末だけで持つ(配信しない)。
-      diaperStock: null
+      // おむつの残り枚数の基準 {baseAt, baseCount}。getMergedDiaperStock経由で配信データとマージする。
+      diaperStock: null,
+      // 1回の目安の手動上書き {ml, setAt}。ml=nullは「自動にもどす」を選んだ記録。
+      // getMergedPerFeedOverride経由で配信データとマージする(diaperStockと同じ考え方)。
+      perFeedOverride: null
     };
   }
   function loadState() {
@@ -1225,7 +1226,14 @@
         deletedFeeds: Array.isArray(parsed.deletedFeeds) ? parsed.deletedFeeds : [],
         revivedFeeds: Array.isArray(parsed.revivedFeeds) ? parsed.revivedFeeds : [],
         diaperStock: (parsed.diaperStock && typeof parsed.diaperStock.baseCount === "number")
-          ? parsed.diaperStock : null
+          ? parsed.diaperStock : null,
+        perFeedOverride: (parsed.perFeedOverride && typeof parsed.perFeedOverride.setAt === "string")
+          ? parsed.perFeedOverride
+          // 移行: 旧settings.perFeedOverrideMl(端末ローカルのみ・2026-07-31の一時実装)から
+          // 新しい{ml, setAt}形式へ。旧データはsetAtを持たないので「いま」を仮に入れる。
+          : (typeof parsed.settings.perFeedOverrideMl === "number" && parsed.settings.perFeedOverrideMl > 0
+            ? { ml: parsed.settings.perFeedOverrideMl, setAt: toLocalISO(new Date()) }
+            : null)
       };
     } catch (err) {
       console.error("[sakura-milk-navi] 状態の読み込みに失敗しました。初期状態を使用します。", err);
@@ -1344,8 +1352,8 @@
     // パパ・助産師さんと決めた量があるときは、体重・月齢からの自動計算より優先する。
     // getPerFeedMl/getDailyTotalMlなど、1回量を参照する箇所はすべてここを通るので、
     // ここ1か所を上書きすれば全体に反映される。
-    var override = state.settings.perFeedOverrideMl;
-    if (typeof override === "number" && override > 0) return override;
+    var override = getMergedPerFeedOverride();
+    if (override && typeof override.ml === "number" && override.ml > 0) return override.ml;
     var row = getAgeRow();
     if (!row) return 0;
     return calcPerFeedMlFromRow(getWeightForCalc(), row, getAgeDays());
@@ -1685,6 +1693,21 @@
     if (isNaN(localMs)) return remote;
     return remoteMs > localMs ? remote : local;
   }
+  // 1回の目安の手動上書きも、diaperStockと同じlast-write-wins(setAtが新しいほう)。
+  // 「自動にもどす」もml=nullの1件の変更として扱うので、あとから自動に戻した操作が
+  // 他端末の古い上書き値に負けない(単に「値が無ければ古いほうを使う」にすると、
+  // 自動に戻した意図が伝わらず古い上書きが復活してしまう)。
+  function getMergedPerFeedOverride() {
+    var local = state.perFeedOverride;
+    var remote = (remoteHistory && remoteHistory.perFeedOverride) || null;
+    if (!local) return remote;
+    if (!remote) return local;
+    var localMs = new Date(local.setAt).getTime();
+    var remoteMs = new Date(remote.setAt).getTime();
+    if (isNaN(remoteMs)) return local;
+    if (isNaN(localMs)) return remote;
+    return remoteMs > localMs ? remote : local;
+  }
   function getMergedPees() {
     return mergeTimeEvents(state.pees, remoteHistory ? remoteHistory.pees : null);
   }
@@ -1758,6 +1781,17 @@
     if (at === null || !isFinite(count) || count < 0 || count > DIAPER_MAX_COUNT) return null;
     return { baseAt: at, baseCount: count };
   }
+  // 1回の目安の手動上書き。ml=nullは「自動にもどす」を選んだという記録そのものなので、
+  // setAtさえ有効なら(diaperStockと違って)mlの範囲チェックをスキップして送る。
+  function normalizePublishPerFeedOverride(override) {
+    if (!override) return null;
+    var at = normalizePublishAt(override.setAt);
+    if (at === null) return null;
+    if (override.ml === null) return { ml: null, setAt: at };
+    var ml = Math.round(Number(override.ml));
+    if (!isFinite(ml) || ml < MIN_PER_FEED_ML || ml > PER_FEED_OVERRIDE_MAX_ML) return null;
+    return { ml: ml, setAt: at };
+  }
   function normalizePublishWeight(entry) {
     if (!entry || typeof entry.date !== "string" || !PUBLISH_DATE_PATTERN.test(entry.date)) return null;
     var grams = Math.round(Number(entry.grams));
@@ -1790,7 +1824,9 @@
       // 取得し直した配信データとマージされたときに復活してしまう。
       deleted: limitToNewest(dropNulls(getMergedDeletedFeeds().map(normalizePublishFeed)).filter(inRangeEntry), atOfEntry),
       // おむつの残りの基準。マージ結果を送らないと、他の端末が入れた新しい基準を消してしまう。
-      diaperStock: normalizePublishDiaperStock(getMergedDiaperStock())
+      diaperStock: normalizePublishDiaperStock(getMergedDiaperStock()),
+      // 1回の目安の手動上書き。同じ理由でマージ結果を送る。
+      perFeedOverride: normalizePublishPerFeedOverride(getMergedPerFeedOverride())
     };
   }
   // 自動配信してよいか: あいことば保存済み かつ Worker側の状態が確定している(成功 or 404未登録)ときだけ。
@@ -3522,12 +3558,13 @@
   function renderPerFeedOverrideCard() {
     var statusEl = document.getElementById("per-feed-override-status");
     var input = document.getElementById("per-feed-override-input");
-    var override = state.settings.perFeedOverrideMl;
+    var override = getMergedPerFeedOverride();
+    var ml = (override && typeof override.ml === "number") ? override.ml : null;
     if (document.activeElement !== input) {
-      input.value = override ? override : "";
+      input.value = ml ? ml : "";
     }
-    statusEl.textContent = override
-      ? "いま1回" + override + "mlに決めているよ"
+    statusEl.textContent = ml
+      ? "いま1回" + ml + "mlに決めているよ(家族の端末と共通だよ)"
       : "いつもは自動で計算しているよ。決めた量があるときだけ入れてね";
   }
   function savePerFeedOverride() {
@@ -3539,17 +3576,22 @@
       return;
     }
     state = Object.assign({}, state, {
-      settings: Object.assign({}, state.settings, { perFeedOverrideMl: value })
+      perFeedOverride: { ml: value, setAt: toLocalISO(new Date()) }
     });
     saveState();
+    // 家族の端末にも届ける。届くまでは自分の端末の表示だけ先に変わる。
+    scheduleAutoPublishHistory();
     showToast("1回" + value + "mlに決めたよ");
     renderPerFeedOverrideCard();
   }
   function clearPerFeedOverride() {
     state = Object.assign({}, state, {
-      settings: Object.assign({}, state.settings, { perFeedOverrideMl: null })
+      // ml:nullも「自動にもどした」という変更として配信する(setAtで新しさを競わせるため)。
+      // ここをnull丸ごとにすると、他端末の古い上書き値が消えずに残ってしまう。
+      perFeedOverride: { ml: null, setAt: toLocalISO(new Date()) }
     });
     saveState();
+    scheduleAutoPublishHistory();
     showToast("自動計算にもどしたよ");
     renderPerFeedOverrideCard();
   }
