@@ -456,6 +456,18 @@
         <p class="body-text" id="baby-info-weight"></p>
       </div>
       <div class="card">
+        <p class="eyebrow">1回のミルクの目安</p>
+        <p class="field-note" id="per-feed-override-status"></p>
+        <div class="field" style="margin:10px 0 0">
+          <label for="per-feed-override-input">決めた量にする(ml)</label>
+          <input type="number" id="per-feed-override-input" min="20" max="400" step="5" inputmode="numeric" placeholder="自動計算">
+        </div>
+        <div class="feed-panel-actions" style="margin-top:12px">
+          <button class="btn btn-ghost" id="per-feed-override-clear">自動にもどす</button>
+          <button class="btn btn-primary" id="per-feed-override-save">これで決める</button>
+        </div>
+      </div>
+      <div class="card">
         <p class="eyebrow">あいことば</p>
         <p class="field-note">通知と記録の同期に使うよ。パパから聞いた番号を入れてね</p>
         <p class="field-note" id="sync-status-text" hidden></p>
@@ -510,6 +522,8 @@
   var OBSERVED_CYCLE_ROUND_MINUTES = 10;
   // 回数が増えて1回量を割り直すときの下限。これ以下は1回として案内しない。
   var MIN_PER_FEED_ML = 20;
+  // 1回の目安を手入力で決めるときの上限(打ち間違い対策、DIAPER_MAX_COUNTと同じ考え方)。
+  var PER_FEED_OVERRIDE_MAX_ML = 400;
   // 次の授乳がこの分数以内に迫ったら「起こさなくていい・先に用意しておこう」の一言を出す。
   // 時刻表示や通知を見て、寝ているさくらたんを起こしにいってしまわないように。
   var NEXT_FEED_PREP_MINUTES = 20;
@@ -638,7 +652,9 @@
     weightGrams: null,
     cycleMinutes: 180,
     feedsPerDay: 8,
-    papaMessages: DEFAULT_PAPA_MESSAGES.slice()
+    papaMessages: DEFAULT_PAPA_MESSAGES.slice(),
+    // 1回の目安を自動計算ではなく直接決めたいときの上書き値。nullなら自動計算のまま。
+    perFeedOverrideMl: null
   };
   /* ---------- 純関数: 計算ロジック ---------- */
   function roundToUnit(value, unit) {
@@ -843,9 +859,10 @@
   }
   // 機能7: 「つくる量」と「飲む目安量」を分ける。粉ミルクのスプーンは20ml用・50ml用・100ml用の3種類。
   // 目安量ちょうどに作るより、スプーンの手数が少ないほうが夜中はずっと楽なので、
-  // 「目安量以上で、いちばん杯数が少なくなる量」を調乳量として提案する。
-  // 大小のスプーンをまたいで同時に使うと逆に手間が増えるため、100ml用と20ml用を
-  // 同時に使う組み合わせは除外し、隣り合うサイズ同士(100+50 / 50+20)か単一サイズのみを許可する。
+  // 「目安量以上で、いちばん無駄(=作る量)が少なくなる組み合わせ」を調乳量として提案する。
+  // 2026-07-31: 以前は100ml用と20ml用の同時使用を除外していた(隣り合うサイズだけを許可)が、
+  // 120mlのように「100+20=120(ぴったり)」より「100+50=150(30ml余分)」が選ばれてしまう
+  // ケースがあり、ユーザー指定で正確さを優先する方針に変更。組み合わせの制約は設けない。
   var SCOOP_UNITS_ML = [100, 50, 20];
   var SCOOP_SEARCH_MAX_COUNT = 20;
   // 調乳プランを {totalMl, scoops:[{unitMl, count}]} で返す(scoopsは大きい単位から順)。
@@ -856,7 +873,6 @@
       var best = null;
       for (var a = 0; a <= k; a++) {
         for (var c = 0; c <= k - a; c++) {
-          if (a > 0 && c > 0) continue; // 100ml用と20ml用の同時使用は除外
           var b = k - a - c;
           var sum = a * 100 + b * 50 + c * 20;
           if (sum >= targetMl && (best === null || sum < best.sum)) best = { sum: sum, a: a, b: b, c: c };
@@ -1325,6 +1341,11 @@
   }
   // 月齢の標準回数を前提にした1回量。実測回数で割り直す前の基準値。
   function getStandardPerFeedMl() {
+    // パパ・助産師さんと決めた量があるときは、体重・月齢からの自動計算より優先する。
+    // getPerFeedMl/getDailyTotalMlなど、1回量を参照する箇所はすべてここを通るので、
+    // ここ1か所を上書きすれば全体に反映される。
+    var override = state.settings.perFeedOverrideMl;
+    if (typeof override === "number" && override > 0) return override;
     var row = getAgeRow();
     if (!row) return 0;
     return calcPerFeedMlFromRow(getWeightForCalc(), row, getAgeDays());
@@ -3455,6 +3476,7 @@
   /* ---------- 設定画面 ---------- */
   function renderSettings() {
     renderBabyInfoCard();
+    renderPerFeedOverrideCard();
     renderPushStatus();
     renderSecretField();
     renderSyncStatus();
@@ -3494,6 +3516,42 @@
     } else {
       weightEl.textContent = "体重はまだ記録がないよ。ぴよログを取り込むと入るよ";
     }
+  }
+  // 1回の目安の手入力欄。入力中(フォーカス中)は上書きしない(renderSecretFieldと同じ理由)。
+  // この設定はほかのsettingsと同じく端末ローカルで、家族間では配信されない。
+  function renderPerFeedOverrideCard() {
+    var statusEl = document.getElementById("per-feed-override-status");
+    var input = document.getElementById("per-feed-override-input");
+    var override = state.settings.perFeedOverrideMl;
+    if (document.activeElement !== input) {
+      input.value = override ? override : "";
+    }
+    statusEl.textContent = override
+      ? "いま1回" + override + "mlに決めているよ"
+      : "いつもは自動で計算しているよ。決めた量があるときだけ入れてね";
+  }
+  function savePerFeedOverride() {
+    var raw = document.getElementById("per-feed-override-input").value.trim();
+    if (!raw) { showToast("量を入れてね。自動に戻すときは「自動にもどす」を使ってね"); return; }
+    var value = parseInt(raw, 10);
+    if (isNaN(value) || value < MIN_PER_FEED_ML || value > PER_FEED_OVERRIDE_MAX_ML) {
+      showToast(MIN_PER_FEED_ML + "〜" + PER_FEED_OVERRIDE_MAX_ML + "mlで入れてね");
+      return;
+    }
+    state = Object.assign({}, state, {
+      settings: Object.assign({}, state.settings, { perFeedOverrideMl: value })
+    });
+    saveState();
+    showToast("1回" + value + "mlに決めたよ");
+    renderPerFeedOverrideCard();
+  }
+  function clearPerFeedOverride() {
+    state = Object.assign({}, state, {
+      settings: Object.assign({}, state.settings, { perFeedOverrideMl: null })
+    });
+    saveState();
+    showToast("自動計算にもどしたよ");
+    renderPerFeedOverrideCard();
   }
   function renderPushStatus() {
     var statusEl = document.getElementById("push-status-text");
@@ -3597,6 +3655,8 @@
       document.getElementById("diaper-form").hidden = true;
     });
     document.getElementById("diaper-save").addEventListener("click", saveDiaperCount);
+    document.getElementById("per-feed-override-save").addEventListener("click", savePerFeedOverride);
+    document.getElementById("per-feed-override-clear").addEventListener("click", clearPerFeedOverride);
     document.getElementById("btn-go-outing").addEventListener("click", function () { showScreen("outing"); });
     document.getElementById("outing-back-top").addEventListener("click", function () { showScreen("home"); });
     document.getElementById("irregular-back-top").addEventListener("click", function () { showScreen("home"); });
