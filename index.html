@@ -1359,6 +1359,11 @@
     return calcPerFeedMlFromRow(getWeightForCalc(), row, getAgeDays());
   }
   function getPerFeedMl() {
+    // 「決めた量」を設定しているときは、回数に応じた自動の割り直し(calcPerFeedForFeeds)を
+    // 経由せずそのまま返す。ここを通すと、標準より回数が多い日に決めた量より少ない値へ
+    // 勝手に下方修正されてしまい、「自動計算より優先する」という設定の趣旨に反するため。
+    var override = getMergedPerFeedOverride();
+    if (override && typeof override.ml === "number" && override.ml > 0) return override.ml;
     var row = getAgeRow();
     if (!row) return 0;
     var info = getCycleInfo();
