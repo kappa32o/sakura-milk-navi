@@ -143,7 +143,11 @@
   .milestone-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
   .milestone-item { display: flex; align-items: center; gap: 12px; }
   .milestone-item .ms-icon { font-size: 1.34rem; flex-shrink: 0; width: 30px; text-align: center; }
-  .milestone-item .ms-body { display: flex; flex-direction: column; gap: 1px; }
+  .milestone-item .ms-body { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+  .ms-progress { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .ms-track { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .ms-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--primary)); transition: width 0.4s var(--ease, ease); }
+  .ms-goal { flex-shrink: 0; font-size: 0.68rem; font-weight: 700; color: var(--text-muted); }
   .milestone-item .ms-value { font-size: 1.1rem; font-weight: 800; color: var(--primary-dark); line-height: 1.3; }
   .milestone-item .ms-label { font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; }
   .growth-display { display: flex; align-items: center; gap: 14px; }
@@ -151,6 +155,17 @@
   .growth-body { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
   .growth-stage-label { margin: 0; font-size: 0.98rem; font-weight: 800; color: var(--primary-dark); }
   .growth-hint { margin: 0; font-size: 0.72rem; color: var(--text-muted); }
+  /* 次の姿までのバー。きのうまで(base)ときょうのぶん(today)を横に並べ、きょうのぶんだけ光らせる */
+  .growth-track { display: flex; }
+  .growth-fill-base { border-radius: 999px 0 0 999px; flex-shrink: 0; }
+  .growth-fill-today { height: 100%; flex-shrink: 0; border-radius: 0 999px 999px 0;
+    background: linear-gradient(90deg, #ffd36e, #ffb347, #ffd36e); background-size: 200% 100%;
+    box-shadow: 0 0 8px rgba(255, 190, 80, 0.8); animation: growth-shimmer 2.4s linear infinite;
+    transition: width 0.4s var(--ease, ease); }
+  .growth-fill-today[hidden] { display: none; }
+  .growth-fill-base:has(+ .growth-fill-today[hidden]) { border-radius: 999px; }
+  @keyframes growth-shimmer { from { background-position: 200% 0; } to { background-position: 0 0; } }
+  @media (prefers-reduced-motion: reduce) { .growth-fill-today { animation: none; } }
   #weaning-progress { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px dashed var(--surface-2); }
   .screen-title { margin: 6px 16px 14px; font-size: 1.24rem; font-weight: 800; }
   .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; font-size: 0.92rem; font-weight: 700; color: var(--text); }
@@ -304,7 +319,7 @@
             <span class="growth-animal" id="growth-animal">🥚</span>
             <div class="growth-body">
               <p class="growth-stage-label" id="growth-stage-label"></p>
-              <div class="progress-track"><div class="progress-fill" id="weaning-fill" style="width:0%"></div></div>
+              <div class="progress-track growth-track"><div class="progress-fill growth-fill-base" id="growth-fill-base" style="width:0%"></div><div class="growth-fill-today" id="growth-fill-today" style="width:0%" hidden></div></div>
               <p class="growth-hint">🍼 のんだミルクの量で育つよ</p>
             </div>
           </div>
@@ -506,11 +521,20 @@
   // 毎回ぴったり飲みきることはないので、少し残しただけで前倒しにすると予定がずれ続ける。
   var FULL_ENOUGH_RATIO = 0.8;
   // 少量しか飲まなくても最低これだけは周期をあける（ミルクの胃排出半減期約78分に整合）。
+  // 2026-10-13以降、周期を縮めるのは前借り(イレギュラー)の記録だけ(calcNextFeed参照)。
   var MIN_NEXT_FEED_RATIO = 0.5;
+  // 目安の半分未満しか飲まなかった回は「少なめ」。3〜4ヶ月の遊び飲み・飲みムラのように、
+  // お腹がすいていなくて飲まなかったケースなので、次回を早める根拠にも周期学習にも使わない。
+  var LIGHT_FEED_RATIO = 0.5;
   // 実測周期の学習パラメータ。月齢テーブルの回数はあくまで一般的な目安で、
   // 赤ちゃんごとの実際のペースとはずれる（さくらたんは標準3.5時間に対し実測2〜3時間）。
   // ずれたまま「次のミルク」を出すと毎回外れるので、記録がたまったら実測を優先する。
-  var OBSERVED_CYCLE_WINDOW_DAYS = 3;
+  // 2026-10-13: 3日→7日に広げ、新しい間隔ほど重く数える(半減期2日)。3日の単純な中央値では、
+  // ぐずった1日で周期が20〜30分動いていた。重みつきなら1日のブレは数分に収まり、
+  // ペースが本当に変わったときは2〜3日で追いつく。周期は保存せず毎回記録から計算する
+  // (保存すると端末ごとに値がずれる。記録が同じなら、ふたりの端末は必ず同じ周期になる)。
+  var OBSERVED_CYCLE_WINDOW_DAYS = 7;
+  var OBSERVED_CYCLE_HALF_LIFE_DAYS = 2;
   var OBSERVED_CYCLE_MIN_SAMPLES = 5;
   // 60分未満は追いミルク・イレギュラー、6時間超は記録漏れか夜のまとめ寝。
   // どちらも「ふだんの周期」ではないので学習から外す。
@@ -630,22 +654,25 @@
   var MILESTONE_BOTTLE_ML = 500;
   // mlのまま出すか、Lに丸めるかの境目。
   var MILESTONE_LITER_THRESHOLD_ML = 1000;
-  // ミルクを卒業していく進み具合: 「これまでに実際に飲んだ量」÷「いまのペースが卒業予定日まで
-  // 続くと仮定した総量」を%にする。卒業予定日そのものは個人差が大きいので、
-  // 厚生労働省「授乳・離乳の支援ガイド」の目安(離乳の完了は生後12〜18か月ごろ)を使った
-  // ざっくりとした計算にとどめる。MONTH_PARAMSとは別物(あちらは今日の目安量の警告に使う実務値)。
-  // 数字や説明文としては出さず、ひよこが育つ見た目(GROWTH_STAGES)だけで表現する。
-  var WEANING_GRADUATION_DAYS = 540; // 生後18ヶ月ごろ
-  var WEANING_RECENT_AVG_WINDOW_DAYS = 14; // 直近の実測ペースを見る期間
-  var WEANING_STAGE_SEEN_KEY = "sakura-milk-navi-weaning-tier-seen";
-  // メダルではなく、ひよこが育っていく見た目にする(2026-07-30、ユーザー指定)。
-  // 進捗%はcalcWeaningProgressのまま、表示だけをこの5段階の見た目に対応させる。
+  // ひよこが育つ見た目(2026-07-30、ユーザー指定)。数字や説明文は出さず、見た目だけで伝える。
+  // 2026-10-13: 「進みが遅すぎてつまらない」とのことで作り直した。以前は生後18ヶ月の卒業までを
+  // 1本のバーにしていて、1日0.2%(画面上1px未満)しか動かず、姿も数ヶ月変わらなかった。
+  // いまは飲んだ総量で12段階に進み(いまのペース約0.9L/日で2〜3週ごとに次の姿)、
+  // バーは「次の姿まで」を表すので毎日目に見えて伸びる。きょう伸びたぶんは別の色で光らせる。
+  var GROWTH_STAGE_SEEN_KEY = "sakura-milk-navi-growth-stage-seen-v2"; // 旧段階名で誤って祝わないよう鍵を新しくした
   var GROWTH_STAGES = [
-    { minPercent: 0,   icon: "🥚", label: "たまご" },
-    { minPercent: 15,  icon: "🐣", label: "うまれたて" },
-    { minPercent: 40,  icon: "🐤", label: "よちよち" },
-    { minPercent: 70,  icon: "🐥", label: "げんき" },
-    { minPercent: 100, icon: "🐔", label: "りっぱ" }
+    { minMl: 0,      icon: "🥚",   label: "たまご" },
+    { minMl: 5000,   icon: "🥚✨", label: "ぴかぴかたまご" },
+    { minMl: 15000,  icon: "🐣",   label: "からが割れたよ" },
+    { minMl: 30000,  icon: "🐣🌸", label: "うまれたて" },
+    { minMl: 50000,  icon: "🐤",   label: "よちよち" },
+    { minMl: 70000,  icon: "🐤🎀", label: "おめかし" },
+    { minMl: 90000,  icon: "🐥",   label: "てくてく" },
+    { minMl: 110000, icon: "🐥🌼", label: "おさんぽ" },
+    { minMl: 135000, icon: "🐥🎵", label: "おうた" },
+    { minMl: 160000, icon: "🐥💨", label: "かけっこ" },
+    { minMl: 190000, icon: "🐔",   label: "りっぱ" },
+    { minMl: 220000, icon: "🐔👑", label: "にわとりの王さま" }
   ];
   var DEFAULT_SETTINGS = {
     birthDate: "2026-07-09",
@@ -674,26 +701,57 @@
     var mid = Math.floor(sorted.length / 2);
     return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
   }
-  // 記録から「さくらたんの実際の周期」を読みとる。直近ウィンドウ内の隣り合う授乳の
-  // 間隔を集め、外れ値（追いミルク・記録漏れ）を落として中央値をとる。
-  // 平均ではなく中央値なのは、夜のまとめ寝1回で全体が引っぱられないようにするため。
-  // サンプルが足りないうちはnullを返し、呼び出し側が月齢の標準値にフォールバックする。
-  function calcObservedCycleMinutes(feedLogs, now) {
-    if (!feedLogs || feedLogs.length === 0) return null;
+  // 重みつき中央値: 値を小さい順に並べ、重みの累積が全体の半分に達したところの値。
+  // items = [{value, weight}]。空ならnull。
+  function weightedMedian(items) {
+    if (items.length === 0) return null;
+    var sorted = items.slice().sort(function (a, b) { return a.value - b.value; });
+    var half = sorted.reduce(function (sum, it) { return sum + it.weight; }, 0) / 2;
+    var acc = 0;
+    for (var i = 0; i < sorted.length; i++) {
+      acc += sorted[i].weight;
+      if (acc >= half) return sorted[i].value;
+    }
+    return sorted[sorted.length - 1].value;
+  }
+  // 学習した間隔の集まりから周期(分)を決める。サンプル不足ならnull(呼び出し側が標準値にフォールバック)。
+  function cycleFromGaps(gaps, minSamples) {
+    if (gaps.length < minSamples) return null;
+    var m = weightedMedian(gaps.map(function (g) { return { value: g.gap, weight: g.weight }; }));
+    var rounded = Math.round(m / OBSERVED_CYCLE_ROUND_MINUTES) * OBSERVED_CYCLE_ROUND_MINUTES;
+    return clamp(rounded, OBSERVED_CYCLE_FLOOR_MINUTES, OBSERVED_CYCLE_CAP_MINUTES);
+  }
+  // 学習に使える授乳間隔を [{startMs, gap, weight}] で返す(全体版・時間帯別版で共通)。
+  // weightは新しいほど重い(OBSERVED_CYCLE_HALF_LIFE_DAYSごとに半分)。
+  // 外すもの: 60分未満(追いミルク)、6時間超(記録漏れ/まとめ寝)、少なめの回の直後の間隔。
+  // 少なめの回(直近の1回量の中央値の半分未満)のあとは間隔が短くなりがちで、
+  // 学習に入れると周期が縮み→回数が増え→1回量が減る、と連鎖してしまうため。
+  // 基準に1回の目安ではなく実績の中央値を使うのは、目安自体がこの周期から計算されるため(循環を避ける)。
+  function collectLearnableGaps(feedLogs, now) {
+    if (!feedLogs || feedLogs.length === 0) return [];
     var nowMs = now.getTime();
     var cutoff = nowMs - OBSERVED_CYCLE_WINDOW_DAYS * 86400000;
-    var times = feedLogs
-      .map(function (l) { return new Date(l.at).getTime(); })
-      .filter(function (t) { return !isNaN(t) && t >= cutoff && t <= nowMs; })
-      .sort(function (a, b) { return a - b; });
+    var feeds = feedLogs
+      .map(function (l) { return { t: new Date(l.at).getTime(), ml: l.ml }; })
+      .filter(function (f) { return !isNaN(f.t) && f.t >= cutoff && f.t <= nowMs; })
+      .sort(function (a, b) { return a.t - b.t; });
+    var typicalMl = median(feeds.map(function (f) { return f.ml; }));
+    var lightLimitMl = typicalMl ? typicalMl * LIGHT_FEED_RATIO : 0;
     var gaps = [];
-    for (var i = 1; i < times.length; i++) {
-      var gap = (times[i] - times[i - 1]) / 60000;
-      if (gap >= OBSERVED_GAP_MIN_MINUTES && gap <= OBSERVED_GAP_MAX_MINUTES) gaps.push(gap);
+    for (var i = 1; i < feeds.length; i++) {
+      var gap = (feeds[i].t - feeds[i - 1].t) / 60000;
+      if (gap < OBSERVED_GAP_MIN_MINUTES || gap > OBSERVED_GAP_MAX_MINUTES) continue;
+      if (feeds[i - 1].ml < lightLimitMl) continue;
+      var ageDays = (nowMs - feeds[i].t) / 86400000;
+      gaps.push({ startMs: feeds[i - 1].t, gap: gap, weight: Math.pow(0.5, ageDays / OBSERVED_CYCLE_HALF_LIFE_DAYS) });
     }
-    if (gaps.length < OBSERVED_CYCLE_MIN_SAMPLES) return null;
-    var rounded = Math.round(median(gaps) / OBSERVED_CYCLE_ROUND_MINUTES) * OBSERVED_CYCLE_ROUND_MINUTES;
-    return clamp(rounded, OBSERVED_CYCLE_FLOOR_MINUTES, OBSERVED_CYCLE_CAP_MINUTES);
+    return gaps;
+  }
+  // 記録から「さくらたんの実際の周期」を読みとる。直近7日の隣り合う授乳の間隔を集め、
+  // 外れ値（追いミルク・記録漏れ・少なめの回のあと）を落として重みつき中央値をとる。
+  // 平均ではなく中央値なのは、夜のまとめ寝1回で全体が引っぱられないようにするため。
+  function calcObservedCycleMinutes(feedLogs, now) {
+    return cycleFromGaps(collectLearnableGaps(feedLogs, now), OBSERVED_CYCLE_MIN_SAMPLES);
   }
   // 時刻(時)がどの時間帯区分に属するかを返す。区分の境界は実測の谷/山に合わせて固定。
   function getTimeBucketForHour(hour) {
@@ -701,32 +759,19 @@
     if (hour >= 15 && hour <= 20) return TIME_BUCKET_EVENING;
     return TIME_BUCKET_NIGHT;
   }
-  // calcObservedCycleMinutesの時間帯別バージョン(機能1)。直近3日の授乳間隔を、
-  // 「前回授乳」側の時刻が属する区分ごとに分けて中央値を学習する。区分を前回側で決めるのは、
+  // calcObservedCycleMinutesの時間帯別バージョン(機能1)。直近7日の授乳間隔を、
+  // 「前回授乳」側の時刻が属する区分ごとに分けて重みつき中央値を学習する。区分を前回側で決めるのは、
   // 「次の授乳」が前回授乳の時刻が属する区分の周期に従う、という呼び出し側の使い方に合わせるため。
-  // フィルタ(60分未満・6時間超を除外)・クランプ(120〜300分)・丸め(10分)は全体版と同じルール。
+  // フィルタ・重み・クランプ(120〜300分)・丸め(10分)は全体版と同じルール。
   function calcObservedCycleMinutesByBucket(feedLogs, now) {
-    var result = {};
-    TIME_BUCKETS.forEach(function (b) { result[b] = null; });
-    if (!feedLogs || feedLogs.length === 0) return result;
-    var nowMs = now.getTime();
-    var cutoff = nowMs - OBSERVED_CYCLE_WINDOW_DAYS * 86400000;
-    var times = feedLogs
-      .map(function (l) { return new Date(l.at).getTime(); })
-      .filter(function (t) { return !isNaN(t) && t >= cutoff && t <= nowMs; })
-      .sort(function (a, b) { return a - b; });
     var gapsByBucket = {};
     TIME_BUCKETS.forEach(function (b) { gapsByBucket[b] = []; });
-    for (var i = 1; i < times.length; i++) {
-      var gap = (times[i] - times[i - 1]) / 60000;
-      if (gap < OBSERVED_GAP_MIN_MINUTES || gap > OBSERVED_GAP_MAX_MINUTES) continue;
-      var bucket = getTimeBucketForHour(new Date(times[i - 1]).getHours());
-      gapsByBucket[bucket].push(gap);
-    }
+    collectLearnableGaps(feedLogs, now).forEach(function (g) {
+      gapsByBucket[getTimeBucketForHour(new Date(g.startMs).getHours())].push(g);
+    });
+    var result = {};
     TIME_BUCKETS.forEach(function (b) {
-      if (gapsByBucket[b].length < OBSERVED_CYCLE_BUCKET_MIN_SAMPLES) return;
-      var rounded = Math.round(median(gapsByBucket[b]) / OBSERVED_CYCLE_ROUND_MINUTES) * OBSERVED_CYCLE_ROUND_MINUTES;
-      result[b] = clamp(rounded, OBSERVED_CYCLE_FLOOR_MINUTES, OBSERVED_CYCLE_CAP_MINUTES);
+      result[b] = cycleFromGaps(gapsByBucket[b], OBSERVED_CYCLE_BUCKET_MIN_SAMPLES);
     });
     return result;
   }
@@ -835,11 +880,19 @@
       return { time: now, ml: roundToUnit(Math.min(perFeedMl, remainingMl)) };
     }
     var cycleMinutes = resolveCycleMinutesForBucket(bucketCycles, fallbackCycleMinutes, new Date(lastLog.at).getHours());
-    // 飲んだ量が少ないときだけ次を早める。ただし目安ぴったりに飲みきることは少なく、
-    // 少し残しただけで比例して早めると予定がじりじり前倒しになってしまうため、
-    // 8割以上飲んでいれば「満足するまで飲んだ」とみなして周期は縮めない。
-    // 下限0.5 = 少量しか飲まなくても最低半周期はあける（ミルクの胃排出半減期約78分に整合）
     var drankRatio = perFeedMl > 0 ? lastLog.ml / perFeedMl : 1;
+    // ふつうの回は、少なく飲んでも次を早めない(2026-10-13変更)。
+    // 気分で30mlしか飲まなかった回で次を半周期に縮めていたが、飲まない＝お腹がすいていないサインで、
+    // 早めるとまた少しだけ飲む「ちょこちょこ飲み」をくり返しやすい。
+    // 早く欲しがったときは、ホームの「いまなら」とイレギュラー画面(60分ガードつき)で受ける。
+    // lightFeedはホームの「少なめだったね」の一言用。
+    var ml = roundToUnit(Math.min(perFeedMl, remainingMl));
+    if (!lastLog.irregular) {
+      var time = new Date(new Date(lastLog.at).getTime() + cycleMinutes * 60000);
+      return { time: time, ml: ml, lightFeed: drankRatio < LIGHT_FEED_RATIO };
+    }
+    // 前借り(イレギュラー)の回だけは、量を意図的に減らしているので時間クレジットで次を早める。
+    // ただし8割以上なら周期は縮めない。下限0.5 = 最低半周期はあける（ミルクの胃排出半減期約78分に整合）
     var ratio;
     if (drankRatio >= FULL_ENOUGH_RATIO) {
       ratio = 1;
@@ -851,9 +904,7 @@
         + ((bounded - MIN_NEXT_FEED_RATIO) / (FULL_ENOUGH_RATIO - MIN_NEXT_FEED_RATIO))
         * (1 - MIN_NEXT_FEED_RATIO);
     }
-    var time = new Date(new Date(lastLog.at).getTime() + cycleMinutes * ratio * 60000);
-    var ml = roundToUnit(Math.min(perFeedMl, remainingMl));
-    return { time: time, ml: ml };
+    return { time: new Date(new Date(lastLog.at).getTime() + cycleMinutes * ratio * 60000), ml: ml, lightFeed: false };
   }
   // 機能7: 「つくる量」と「飲む目安量」を分ける。粉ミルクのスプーンは20ml用・50ml用・100ml用の3種類。
   // 目安量ちょうどに作るより、スプーンの手数が少ないほうが夜中はずっと楽なので、
@@ -1017,36 +1068,155 @@
     if (totalMl < MILESTONE_LITER_THRESHOLD_ML) return Math.round(totalMl) + "ml";
     return (totalMl / 1000).toFixed(1) + "L";
   }
-  // 直近の実測ペース(1日あたりml)。calcDiaperPerDayと同じ考え方で、期間で単純に割ると
-  // 記録がまばらな時期に不正確になるため、実際に記録がある範囲(spanDays)で割る。
-  function calcRecentDailyAvgMl(feedLogs, now) {
-    var sinceMs = now.getTime() - WEANING_RECENT_AVG_WINDOW_DAYS * 86400000;
-    var logs = (feedLogs || [])
-      .map(function (log) { return { atMs: new Date(log.at).getTime(), ml: Number(log.ml) }; })
-      .filter(function (log) {
-        return !isNaN(log.atMs) && log.atMs >= sinceMs && log.atMs <= now.getTime()
-          && isFinite(log.ml) && log.ml > 0;
-      })
-      .sort(function (a, b) { return a.atMs - b.atMs; });
-    if (logs.length < 2) return null;
-    var spanDays = (logs[logs.length - 1].atMs - logs[0].atMs) / 86400000;
-    if (spanDays < 0.5) return null; // 半日ぶんも無いと1日あたりに直せない
-    var total = logs.reduce(function (sum, log) { return sum + log.ml; }, 0);
-    return total / spanDays;
+  /* ---------- ミルク以外の実績(2026-10-13追加、ユーザー指定) ---------- */
+  // お祝いの日: 100日目(お食い初め)、毎月の月誕生日(6ヶ月はハーフバースデー)、1歳の誕生日。
+  // 100日は伝統どおり「うまれた日を1日目と数えて100日目」=誕生日+99日。
+  var CELEBRATION_100_DAY_OFFSET = 99;
+  var CELEBRATION_MAX_MONTHS = 12;
+  function addMonthsClamped(date, months) {
+    var y = date.getFullYear();
+    var m = date.getMonth() + months;
+    var lastDay = new Date(y, m + 1, 0).getDate(); // 31日うまれでも月末に丸める
+    return new Date(y, m, Math.min(date.getDate(), lastDay));
   }
-  // ミルク卒業までの進捗。「これまでに実際に飲んだ量」と、「いまの実測ペースが
-  // 卒業予定日(WEANING_GRADUATION_DAYS)まで直線的にゼロへ減っていくと仮定した場合の
-  // 残り総量」を比べて%にする。実測ペースそのものを土台にするので、
-  // 「成長に合わせた量」が自動で反映される(体重や月齢の固定テーブルを別途延長しない)。
-  function calcWeaningProgress(totalMl, feedLogs, ageDays, now) {
-    if (typeof ageDays !== "number" || ageDays < 0) return null;
-    var recentAvg = calcRecentDailyAvgMl(feedLogs, now);
-    if (recentAvg === null) return null; // 直近のペースが分かるまでは出さない
-    var remainingDays = Math.max(0, WEANING_GRADUATION_DAYS - ageDays);
-    var projectedFutureMl = remainingDays * recentAvg / 2;
-    var targetMl = totalMl + projectedFutureMl;
-    var percent = targetMl > 0 ? clamp(Math.round((totalMl / targetMl) * 100), 0, 100) : 100;
-    return { percent: percent, remainingDays: remainingDays };
+  function listCelebrations(birthDateStr) {
+    var birth = new Date(birthDateStr + "T00:00:00");
+    if (isNaN(birth.getTime())) return [];
+    var list = [{
+      date: new Date(birth.getFullYear(), birth.getMonth(), birth.getDate() + CELEBRATION_100_DAY_OFFSET),
+      icon: "🍡", name: "100日のお祝い"
+    }];
+    for (var n = 1; n <= CELEBRATION_MAX_MONTHS; n++) {
+      var name = n === 12 ? "1歳のお誕生日" : n === 6 ? "ハーフバースデー" : n + "ヶ月の月誕生日";
+      list.push({ date: addMonthsClamped(birth, n), icon: n === 12 ? "🎂" : n === 6 ? "🎈" : "🌸", name: name });
+    }
+    return list.sort(function (a, b) { return a.date - b.date; });
+  }
+  // きょう以降でいちばん近いお祝い。{icon, name, daysLeft, percent}。1歳を過ぎたらnull。
+  // percentは「ひとつ前のお祝い(なければうまれた日)から、つぎのお祝いまで」の進み具合。
+  function calcNextCelebration(birthDateStr, now) {
+    if (!birthDateStr) return null;
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var list = listCelebrations(birthDateStr);
+    var idx = -1;
+    for (var i = 0; i < list.length; i++) { if (list[i].date >= today) { idx = i; break; } }
+    if (idx < 0) return null;
+    var next = list[idx];
+    var prevDate = idx > 0 ? list[idx - 1].date : new Date(birthDateStr + "T00:00:00");
+    var span = next.date - prevDate;
+    return {
+      icon: next.icon, name: next.name,
+      daysLeft: Math.round((next.date - today) / 86400000),
+      percent: span > 0 ? clamp(((today - prevDate) / span) * 100, 0, 100) : 100
+    };
+  }
+  // 体重の成長: いちばん古い実測といちばん新しい実測の比較。2件以上・増えているときだけ返す。
+  function calcWeightGrowth(weights) {
+    var valid = (weights || []).filter(function (w) {
+      return w && typeof w.date === "string" && isFinite(w.grams) && w.grams > 0;
+    }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    if (valid.length < 2) return null;
+    var first = valid[0];
+    var last = valid[valid.length - 1];
+    if (last.grams <= first.grams) return null;
+    return { gainGrams: last.grams - first.grams, ratio: last.grams / first.grams, firstDate: first.date };
+  }
+  // いちばん飲めた記録: 1回の最大と、1日の合計の最大。どちらも同点なら古いほう(先に達成した日)。
+  // isNewToday = きょうの記録が、きのうまでの最高をはじめて超えた。
+  function calcFeedBests(feedLogs, todayStr) {
+    var single = null;
+    var singleBefore = 0;
+    var dayTotals = {};
+    (feedLogs || []).forEach(function (l) {
+      var ml = Number(l.ml);
+      if (!isFinite(ml) || ml <= 0 || typeof l.at !== "string") return;
+      var date = l.at.slice(0, 10);
+      if (!single || ml > single.ml || (ml === single.ml && date < single.date)) single = { ml: ml, date: date };
+      if (date < todayStr) singleBefore = Math.max(singleBefore, ml);
+      dayTotals[date] = (dayTotals[date] || 0) + ml;
+    });
+    if (!single) return null;
+    var day = null;
+    var dayBefore = 0;
+    Object.keys(dayTotals).sort().forEach(function (date) {
+      if (!day || dayTotals[date] > day.ml) day = { ml: dayTotals[date], date: date };
+      if (date < todayStr) dayBefore = Math.max(dayBefore, dayTotals[date]);
+    });
+    return {
+      single: single, singleIsNewToday: single.date === todayStr && singleBefore > 0 && single.ml > singleBefore,
+      day: day, dayIsNewToday: day.date === todayStr && dayBefore > 0 && day.ml > dayBefore
+    };
+  }
+  // 記録を続けた日数: 何か1件(ミルク/おしっこ/うんち)でも記録がある日が、きょう(まだならきのう)から何日続いているか。
+  // きょうまだ記録していないだけで0日に戻ると悲しいので、きのうまで続いていればそこから数える。
+  function calcRecordStreakDays(feedLogs, pees, poops, now) {
+    var dates = {};
+    (feedLogs || []).forEach(function (l) { if (l && typeof l.at === "string") dates[l.at.slice(0, 10)] = true; });
+    (pees || []).concat(poops || []).forEach(function (t) { if (typeof t === "string") dates[t.slice(0, 10)] = true; });
+    var cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (!dates[formatDateISO(cursor)]) cursor.setDate(cursor.getDate() - 1);
+    var streak = 0;
+    while (dates[formatDateISO(cursor)]) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+  /* ---------- 実績の進捗バー(2026-10-13追加) ---------- */
+  // 各実績に「つぎのキリのいい目標」までのバーをつける。目標の間隔は、いまのペースで
+  // 1〜2週間に1回は届く幅にしている(遠すぎると、ひよこの旧バーと同じく動かなくてつまらない)。
+  // 返り値は {percent, goal(表示用の文字)}。目標が無いときはnull。
+  var MILK_GOAL_STEP_ML = 10000;   // 10Lごと(約0.9L/日で11日ほど)
+  var FEED_GOAL_STEP = 100;        // 100回ごと(1日約10回で10日ほど)
+  var DIAPER_GOAL_STEP = 100;
+  var STREAK_GOALS = [3, 7, 14, 30, 50, 100, 150, 200, 300, 365, 500, 730, 1000];
+  // 体重は「うまれたときの何倍」。2倍(生後3〜4ヶ月ごろ)・3倍(1歳ごろ)は乳児健診でも使う目安。
+  var WEIGHT_RATIO_GOALS = [1.5, 2, 2.5, 3];
+  function calcStepGoal(value, step, formatGoal) {
+    var from = Math.floor(value / step) * step;
+    return { percent: ((value - from) / step) * 100, goal: formatGoal(from + step) };
+  }
+  // 目標の段(goals)のうち、valueのつぎの段まで。前の段(なければbase)を0%とする。
+  function calcTierGoal(value, goals, base, formatGoal) {
+    for (var i = 0; i < goals.length; i++) {
+      if (value < goals[i]) {
+        var from = i === 0 ? base : goals[i - 1];
+        return { percent: clamp(((value - from) / (goals[i] - from)) * 100, 0, 100), goal: formatGoal(goals[i]) };
+      }
+    }
+    return null;
+  }
+  // つぎの誕生日まで(1歳まで、のあとは2歳まで…)
+  function calcBirthdayGoal(birthDateStr, now) {
+    var birth = new Date(birthDateStr + "T00:00:00");
+    if (isNaN(birth.getTime())) return null;
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var years = 1;
+    while (addMonthsClamped(birth, years * 12) <= today) years += 1;
+    var from = addMonthsClamped(birth, (years - 1) * 12);
+    var to = addMonthsClamped(birth, years * 12);
+    return { percent: ((today - from) / (to - from)) * 100, goal: years + "歳" };
+  }
+  // "YYYY-MM-DD" → 「M月D日」
+  function formatMonthDay(dateStr) {
+    return parseInt(dateStr.slice(5, 7), 10) + "月" + parseInt(dateStr.slice(8, 10), 10) + "日";
+  }
+  // ひよこの段階と、次の姿までの進み具合(純関数)。
+  // 返り値: { stage, isFinal, basePercent, todayPercent }
+  //   basePercent  = きのうまでのぶんで、次の姿までのバーがどこまで埋まっているか(0〜100)
+  //   todayPercent = その先に、きょう飲んだぶんで伸びた長さ(光らせる部分)
+  // きょうのうちに次の姿へ進んだときは、新しい段階の頭から測る(base=0、きょうのぶん=今の位置まで)。
+  function calcGrowthProgress(totalMl, todayMl) {
+    var idx = 0;
+    GROWTH_STAGES.forEach(function (s, i) { if (totalMl >= s.minMl) idx = i; });
+    var stage = GROWTH_STAGES[idx];
+    var next = GROWTH_STAGES[idx + 1];
+    if (!next) return { stage: stage, isFinal: true, basePercent: 100, todayPercent: 0 };
+    var span = next.minMl - stage.minMl;
+    var toPercent = function (ml) { return clamp(((ml - stage.minMl) / span) * 100, 0, 100); };
+    var nowPercent = toPercent(totalMl);
+    var basePercent = toPercent(totalMl - Math.max(0, todayMl));
+    return { stage: stage, isFinal: false, basePercent: basePercent, todayPercent: nowPercent - basePercent };
   }
   // 未来の日時は記録させない。1件でも入ると getLastFeedLog() がそれを最新とみなし、
   // 「次の授乳」と通知が大きく先にずれる。周期学習(calcObservedCycleMinutes)は
@@ -1130,7 +1300,7 @@
       //
       // idに配列の位置を使わない。位置は受信のたびに変わるため、削除確認
       // (「本当に削除？」)の表示中に受信が走ると、確認状態が別の行に移って見えていた。
-      return { id: "h-" + r.at + "-" + r.ml, at: r.at, ml: r.ml, irregular: false, remote: true };
+      return { id: "h-" + r.at + "-" + r.ml, at: r.at, ml: r.ml, irregular: r.irregular === true, remote: true };
     });
     return localLogs.concat(extra);
   }
@@ -1775,7 +1945,9 @@
     var at = normalizePublishAt(entry.at);
     var ml = Math.round(Number(entry.ml));
     if (at === null || !isFinite(ml) || ml < 0 || ml > 2000) return null;
-    return { at: at, ml: ml };
+    // 前借りの印も送る。次の授乳時刻の計算が前借りかどうかで変わるので、
+    // 送らないと、つけた端末と受け取った端末で次の時刻がずれる(calcNextFeed参照)。
+    return entry.irregular === true ? { at: at, ml: ml, irregular: true } : { at: at, ml: ml };
   }
   // おむつの残りの基準。Worker側も同じ形式(baseAt=分まで / baseCount=0〜999)で検証するので、
   // 不正なら送らない(nullにする)。1件の不正で配信全体が400で落ちるのを避ける。
@@ -2176,6 +2348,15 @@
     else if (currentScreenName === "settings") renderSettings();
   }
   /* ---------- ホーム画面 ---------- */
+  // 少なめだった回のあとの一言。次回は早めない代わりに、早く欲しがってもあげていいことを伝える。
+  // 60分未満はまだ消化の途中なので、あげていい時刻を具体的に出す(それ以降は「いまなら」の表示が受け持つ)。
+  // 1文=1行・各18文字以内(iPhoneの幅で折り返さないように)。
+  function buildLightFeedHint(lastLog, now) {
+    var okAt = new Date(new Date(lastLog.at).getTime() + MIN_MILK_INTERVAL_MINUTES * 60000);
+    return okAt > now
+      ? "さっきは少なめだったね。欲しがったら" + formatTime(okAt) + "からOK"
+      : "さっきは少なめだったね。欲しがったら早めでも大丈夫";
+  }
   function renderHome() {
     var perFeed = getPerFeedMl();
     var info = getCycleInfo();
@@ -2218,7 +2399,9 @@
       setMessageWithLineBreaks(hintEl, showsNowAmount
         ? "飲む目安は" + nextFeed.ml + "ml。いまなら"
           + formatPrepPlan(calcPrepPlan(nowSuggestion.okMl), { withVerb: false })
-        : "飲む目安は" + nextFeed.ml + "ml。残しても、ぜんぶ飲んでも大丈夫");
+        : nextFeed.lightFeed
+          ? buildLightFeedHint(lastLog, now)
+          : "飲む目安は" + nextFeed.ml + "ml。残しても、ぜんぶ飲んでも大丈夫");
       hintEl.hidden = false;
       // 目安の時刻はあくまで「用意をはじめる合図」。起こしてまであげる必要はない。
       noteEl.hidden = remainMin > NEXT_FEED_PREP_MINUTES;
@@ -2312,41 +2495,53 @@
     showToast("おむつの残りを覚えたよ");
     renderDiaperCard();
   }
-  // progressの%から見た目の段階を選ぶ。GROWTH_STAGESはminPercent昇順の前提。
-  function getGrowthStage(percent) {
-    var stage = GROWTH_STAGES[0];
-    GROWTH_STAGES.forEach(function (s) {
-      if (percent >= s.minPercent) stage = s;
-    });
-    return stage;
-  }
-  // ひよこが育っていく見た目。progressがnull(直近の記録ペースが分からない)のときは隠す。
-  // 数字や説明文は出さず、見た目(絵文字＋バー)だけで伝える(2026-07-30、ユーザー指定)。
-  function renderWeaningProgress(totalMl, feedLogs, ageDays, now) {
-    var wrap = document.getElementById("weaning-progress");
-    var progress = calcWeaningProgress(totalMl, feedLogs, ageDays, now);
-    if (!progress) {
-      wrap.hidden = true;
-      return;
-    }
-    var stage = getGrowthStage(progress.percent);
-    document.getElementById("growth-animal").textContent = stage.icon;
-    document.getElementById("growth-stage-label").textContent = stage.label;
-    document.getElementById("weaning-fill").style.width = progress.percent + "%";
-    wrap.hidden = false;
-    maybeCelebrateGrowthStage(stage);
+  // ひよこが育っていく見た目。数字や説明文は出さず、見た目(絵文字＋バー)だけで伝える。
+  // バーは「次の姿まで」。きょう伸びたぶんだけ別の色で光らせ、記録するたびに伸びるのが分かるようにする。
+  function renderGrowthProgress(totalMl, todayMl) {
+    var p = calcGrowthProgress(totalMl, todayMl);
+    document.getElementById("growth-animal").textContent = p.stage.icon;
+    document.getElementById("growth-stage-label").textContent = p.stage.label;
+    document.getElementById("growth-fill-base").style.width = p.basePercent + "%";
+    var todayEl = document.getElementById("growth-fill-today");
+    todayEl.style.width = p.todayPercent + "%";
+    todayEl.hidden = p.todayPercent <= 0;
+    document.getElementById("weaning-progress").hidden = false;
+    maybeCelebrateGrowthStage(p.stage);
   }
   // 段階が変わったときだけ祝う。初回描画(seenが空)でいきなり祝わないようにする。
+  // 保存できない環境(プライベートブラウズ等)でも、カードの表示は止めない。
   function maybeCelebrateGrowthStage(stage) {
-    var seen = localStorage.getItem(WEANING_STAGE_SEEN_KEY) || "";
-    if (stage.label !== seen) {
+    try {
+      var seen = localStorage.getItem(GROWTH_STAGE_SEEN_KEY) || "";
+      if (stage.label === seen) return;
       if (seen !== "") showToast("🎉 " + stage.icon + " " + stage.label + " になったよ");
-      localStorage.setItem(WEANING_STAGE_SEEN_KEY, stage.label);
+      localStorage.setItem(GROWTH_STAGE_SEEN_KEY, stage.label);
+    } catch (err) {
+      console.error("[sakura-milk-navi] 成長の段階を保存できませんでした", err);
     }
   }
   // 累計のマイルストーン。日々の「今日の合計」とは別に、うまれてからの積み上げを見せる。
   // ホームのいちばん下に置くのは、スクロールしきったところで目に入るのがちょうどいいため
   // (次の授乳の判断には使わない情報なので、上に置くと邪魔になる)。
+  // 実績1行ぶんの進捗バー。右端に「つぎは何まで」を小さく添える(goalが空なら添えない)。
+  function buildMilestoneBar(progress) {
+    var row = document.createElement("div");
+    row.className = "ms-progress";
+    var track = document.createElement("div");
+    track.className = "ms-track";
+    var fill = document.createElement("div");
+    fill.className = "ms-fill";
+    fill.style.width = clamp(progress.percent, 0, 100) + "%";
+    track.appendChild(fill);
+    row.appendChild(track);
+    if (progress.goal) {
+      var goal = document.createElement("span");
+      goal.className = "ms-goal";
+      goal.textContent = "つぎ " + progress.goal;
+      row.appendChild(goal);
+    }
+    return row;
+  }
   function renderMilestoneCard() {
     var card = document.getElementById("milestone-card");
     var listEl = document.getElementById("milestone-list");
@@ -2359,25 +2554,67 @@
       return;
     }
     var ageDays = getAgeDays();
-    renderWeaningProgress(stats.totalMl, feedLogs, ageDays, new Date());
-    var items = [
+    var now = new Date();
+    renderGrowthProgress(stats.totalMl, getTodayTotalMl());
+    var items = [];
+    // お祝いの日はいちばん上に。近づいてくるのが毎日わかるのがうれしいので
+    var celebration = calcNextCelebration(state.settings.birthDate, now);
+    if (celebration) {
+      items.push(celebration.daysLeft === 0
+        ? { icon: "🎉", value: "きょうは" + celebration.name + "！", label: "おめでとう、さくらたん" }
+        : { icon: celebration.icon, value: "つぎは" + celebration.name, label: "あと" + celebration.daysLeft + "日だよ",
+            progress: { percent: celebration.percent, goal: "" } });
+    }
+    items.push(
       {
         icon: "🍼",
         value: "あげたミルク " + formatTotalVolume(stats.totalMl),
         // Lの数字だけではピンとこないので、目に見える物に置き換える
         label: stats.bottleCount >= 1
           ? "500mlのペットボトル約" + stats.bottleCount + "本ぶんだよ"
-          : "ここから積み上がっていくよ"
+          : "ここから積み上がっていくよ",
+        progress: calcStepGoal(stats.totalMl, MILK_GOAL_STEP_ML, function (ml) { return (ml / 1000) + "L"; })
       },
       // 記録はパパの端末ぶんもマージされた「家族の合計」。はるたん一人の数字ではない。
-      { icon: "🤱", value: "授乳 " + stats.feedCount + "回", label: "ふたりで積み上げてきたぶんだよ" }
-    ];
+      { icon: "🤱", value: "授乳 " + stats.feedCount + "回", label: "ふたりで積み上げてきたぶんだよ",
+        progress: calcStepGoal(stats.feedCount, FEED_GOAL_STEP, function (n) { return n + "回"; }) }
+    );
+    // 自己ベストにはバーをつけない。「きょうの量÷ベスト」を出すと、ベストを超えるまで
+    // 飲ませたくなってしまう(このアプリは「残しても大丈夫」の立場なので逆効果)。
+    var bests = calcFeedBests(feedLogs, formatDateISO(now));
+    if (bests) {
+      items.push({
+        icon: "🏆",
+        value: "1回でいちばん " + bests.single.ml + "ml",
+        label: bests.singleIsNewToday ? "きょう記録を更新したよ🎉" : formatMonthDay(bests.single.date) + "に飲めたよ"
+      });
+      items.push({
+        icon: "🥛",
+        value: "1日でいちばん " + formatTotalVolume(bests.day.ml),
+        label: bests.dayIsNewToday ? "きょう記録を更新したよ🎉" : formatMonthDay(bests.day.date) + "に飲めたよ"
+      });
+    }
+    var weightGrowth = calcWeightGrowth(getMergedWeightHistory());
+    if (weightGrowth) {
+      items.push({
+        icon: "⚖️",
+        value: "+" + weightGrowth.gainGrams.toLocaleString("ja-JP") + "g 大きくなったよ",
+        label: formatMonthDay(weightGrowth.firstDate) + "の" + weightGrowth.ratio.toFixed(1) + "倍だよ",
+        progress: calcTierGoal(weightGrowth.ratio, WEIGHT_RATIO_GOALS, 1, function (r) { return r + "倍"; })
+      });
+    }
+    var streak = calcRecordStreakDays(feedLogs, getMergedPees(), getMergedPoops(), now);
+    if (streak >= 2) {
+      items.push({ icon: "📒", value: "記録 " + streak + "日れんぞく", label: "ふたりでつづけてきたぶんだよ",
+        progress: calcTierGoal(streak, STREAK_GOALS, 0, function (d) { return d + "日"; }) });
+    }
     // おしっこ・うんちは記録が任意なので、1件も無いときは項目ごと出さない
     if (stats.diaperCount > 0) {
       items.push({
         icon: "🧷",
         value: "おむつ替え " + stats.diaperCount + "回",
-        label: "おしっことうんちの記録ぶんだよ"
+        label: "おしっことうんちの記録ぶんだよ",
+        progress: calcStepGoal(stats.diaperCount, DIAPER_GOAL_STEP, function (n) { return n + "回"; })
       });
     }
     // 夜中の回数はここに出さない。夜間の担当はみつひこなので、
@@ -2386,7 +2623,8 @@
       items.push({
         icon: "🌸",
         value: "さくらたんと " + ageDays + "日",
-        label: "うまれた日からきょうまで"
+        label: "うまれた日からきょうまで",
+        progress: calcBirthdayGoal(state.settings.birthDate, now)
       });
     }
     listEl.innerHTML = "";
@@ -2406,6 +2644,7 @@
       label.textContent = item.label;
       body.appendChild(value);
       body.appendChild(label);
+      if (item.progress) body.appendChild(buildMilestoneBar(item.progress));
       li.appendChild(icon);
       li.appendChild(body);
       listEl.appendChild(li);
