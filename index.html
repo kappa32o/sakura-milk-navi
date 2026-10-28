@@ -483,6 +483,30 @@
         </div>
       </div>
       <div class="card">
+        <p class="eyebrow">寝る前のミルク（お風呂のあと）</p>
+        <p class="field-note" id="bedtime-feed-status"></p>
+        <div class="field" style="margin:10px 0 0">
+          <label for="bedtime-feed-input">いつもの時刻</label>
+          <input type="time" id="bedtime-feed-input" step="300">
+        </div>
+        <div class="feed-panel-actions" style="margin-top:12px">
+          <button class="btn btn-ghost" id="bedtime-feed-off">使わない</button>
+          <button class="btn btn-primary" id="bedtime-feed-save">これで決める</button>
+        </div>
+      </div>
+      <div class="card">
+        <p class="eyebrow">朝まで寝る</p>
+        <p class="field-note" id="morning-wake-status"></p>
+        <div class="field" style="margin:10px 0 0">
+          <label for="morning-wake-input">朝のミルクの時刻</label>
+          <input type="time" id="morning-wake-input" step="300">
+        </div>
+        <div class="feed-panel-actions" style="margin-top:12px">
+          <button class="btn btn-ghost" id="morning-wake-off">使わない</button>
+          <button class="btn btn-primary" id="morning-wake-save">これで決める</button>
+        </div>
+      </div>
+      <div class="card">
         <p class="eyebrow">あいことば</p>
         <p class="field-note">通知と記録の同期に使うよ。パパから聞いた番号を入れてね</p>
         <p class="field-note" id="sync-status-text" hidden></p>
@@ -533,6 +557,23 @@
   // ぐずった1日で周期が20〜30分動いていた。重みつきなら1日のブレは数分に収まり、
   // ペースが本当に変わったときは2〜3日で追いつく。周期は保存せず毎回記録から計算する
   // (保存すると端末ごとに値がずれる。記録が同じなら、ふたりの端末は必ず同じ周期になる)。
+  // 寝る前のミルク(お風呂のあと)。2026-10-28追加。21時ごろのミルクは「何時間あいたか」ではなく
+  // 「お風呂のあと」という時刻で決まる習慣で、間隔だけの予測では17時台に飲むと22時と出ていた。
+  // 夕方に飲んで次の予測がこの時刻より後ろになるときは、この時刻に寄せる。設定画面で家族共通に変えられる。
+  // 直近2週間の記録で、夕方の予測と実際のずれが平均37分→32分になることを確認(17:50→22:00が21:00に)。
+  var DEFAULT_BEDTIME_FEED_TIME = "21:00";
+  // 寝る前のミルクまでこれ未満しかないときは寄せない(いま飲んだのが寝る前のミルク相当なので)。
+  var BEDTIME_SNAP_MIN_LEAD_MINUTES = 90;
+  // 夕方の周期は「夕方のうちに次を飲んだ間隔」(終わりが22時より前)だけで学習する。
+  // 寝る前のミルクのあとの長い間隔(4〜5時間)を混ぜると、夕方の周期が長めに出てしまうため。
+  var EVENING_GAP_END_HOUR = 22;
+  // 朝まで寝る(2026-10-28追加)。夜中のミルク(23:00〜4:59)のあとは、朝のこの時刻より前に次を出さない。
+  // 実際の記録では夜中のミルクのあとは7:00〜8:00に飲む日がほとんどなのに、間隔だけの予測では4:30〜5:00と出ていた
+  // (6時間超の間隔は記録漏れとみなして学習から外しているので、朝までの長い眠りは周期に表れない)。
+  // 設定画面で家族共通に時刻を変えたり、使わないにしたりできる。
+  var DEFAULT_MORNING_WAKE_TIME = "07:00";
+  var NIGHT_FEED_START_HOUR = 23;
+  var NIGHT_FEED_END_HOUR = 5;
   var OBSERVED_CYCLE_WINDOW_DAYS = 7;
   var OBSERVED_CYCLE_HALF_LIFE_DAYS = 2;
   var OBSERVED_CYCLE_MIN_SAMPLES = 5;
@@ -768,14 +809,27 @@
   // 「前回授乳」側の時刻が属する区分ごとに分けて重みつき中央値を学習する。区分を前回側で決めるのは、
   // 「次の授乳」が前回授乳の時刻が属する区分の周期に従う、という呼び出し側の使い方に合わせるため。
   // フィルタ・重み・クランプ(120〜300分)・丸め(10分)は全体版と同じルール。
+  // 夕方区分は、次回時刻の予測用に、終わりの時刻でさらに2つに分けたものも返す(2026-10-28):
+  //   eveningShort   = 夕方のうちに次を飲んだ間隔(終わりが15:00〜21:59)。ふだんの夕方の周期
+  //   eveningToNight = 夕方に始まって22時以降に次を飲んだ間隔(寝る前のミルクのあとの長い間隔)
+  // 両方を混ぜた周期で予測していたころは、17時台に飲むと次が22時と出ていた。
+  // evening(混ぜたもの)は1日の回数(=1回量)の計算に使うので、そのまま残す(1回量を変えないため)。
+  function isEveningEndedGap(g) {
+    var endHour = new Date(g.startMs + g.gap * 60000).getHours();
+    return endHour >= 15 && endHour < EVENING_GAP_END_HOUR;
+  }
   function calcObservedCycleMinutesByBucket(feedLogs, now) {
-    var gapsByBucket = {};
+    var gapsByBucket = { eveningShort: [], eveningToNight: [] };
     TIME_BUCKETS.forEach(function (b) { gapsByBucket[b] = []; });
     collectLearnableGaps(feedLogs, now).forEach(function (g) {
-      gapsByBucket[getTimeBucketForHour(new Date(g.startMs).getHours())].push(g);
+      var bucket = getTimeBucketForHour(new Date(g.startMs).getHours());
+      gapsByBucket[bucket].push(g);
+      if (bucket === TIME_BUCKET_EVENING) {
+        gapsByBucket[isEveningEndedGap(g) ? "eveningShort" : "eveningToNight"].push(g);
+      }
     });
     var result = {};
-    TIME_BUCKETS.forEach(function (b) {
+    Object.keys(gapsByBucket).forEach(function (b) {
       result[b] = cycleFromGaps(gapsByBucket[b], OBSERVED_CYCLE_BUCKET_MIN_SAMPLES);
     });
     return result;
@@ -873,13 +927,52 @@
     if (perFeedMl <= 0) return cycleMinutes;
     return Math.round(cycleMinutes * (givenMl / perFeedMl));
   }
+  // 夕方(15〜20時台)に飲んだときの次回時刻(2026-10-28)。夕方以外・材料が無いときはnull(ふつうの計算に任せる)。
+  // 1. 夕方のうちに次を飲んだ間隔(eveningShort)で予測する
+  // 2. それだと22時をまたぐなら、いま飲んだのが寝る前のミルク相当なので、寝る前の長い間隔(eveningToNight)で予測する
+  // 3. 予測が寝る前のミルクの時刻より後ろで、その時刻まで90分以上あるなら、寝る前のミルクの時刻に寄せる
+  //    (21時ごろのミルクは「お風呂のあと」という時刻で決まる習慣で、間隔では決まらないため)
+  function calcEveningNextTime(lastAt, cycleMinutes, options) {
+    if (!options || getTimeBucketForHour(lastAt.getHours()) !== TIME_BUCKET_EVENING) return null;
+    var lastMs = lastAt.getTime();
+    var gap = options.eveningShortMinutes || cycleMinutes;
+    var crossesNight = new Date(lastMs + gap * 60000).getHours() >= EVENING_GAP_END_HOUR
+      || new Date(lastMs + gap * 60000).getDate() !== lastAt.getDate();
+    if (crossesNight && options.eveningToNightMinutes) gap = options.eveningToNightMinutes;
+    var predicted = new Date(lastMs + gap * 60000);
+    if (options.bedtimeMinutes !== null && options.bedtimeMinutes !== undefined) {
+      var bedtime = new Date(lastAt.getFullYear(), lastAt.getMonth(), lastAt.getDate(),
+        Math.floor(options.bedtimeMinutes / 60), options.bedtimeMinutes % 60);
+      var leadMinutes = (bedtime.getTime() - lastMs) / 60000;
+      if (leadMinutes >= BEDTIME_SNAP_MIN_LEAD_MINUTES && predicted > bedtime) return bedtime;
+    }
+    return predicted;
+  }
+  // 朝まで寝る(2026-10-28)。夜中(23:00〜4:59)に飲んだら、次はその朝の設定時刻より前にしない。
+  // 予測がもともと朝の時刻より後ろなら、そのまま。
+  function applyMorningWake(lastAt, predicted, options) {
+    if (!options || options.morningMinutes === null || options.morningMinutes === undefined) return predicted;
+    var hour = lastAt.getHours();
+    if (!(hour >= NIGHT_FEED_START_HOUR || hour < NIGHT_FEED_END_HOUR)) return predicted;
+    var dayOffset = hour >= NIGHT_FEED_START_HOUR ? 1 : 0; // 23時台に飲んだら翌朝
+    var morning = new Date(lastAt.getFullYear(), lastAt.getMonth(), lastAt.getDate() + dayOffset,
+      Math.floor(options.morningMinutes / 60), options.morningMinutes % 60);
+    return predicted < morning ? morning : predicted;
+  }
+  // ふつうの回の次回時刻。ホームの表示とタイムチャートの予定で同じ計算を使う。
+  function calcNextTimeAfter(lastAt, cycleMinutes, options) {
+    var predicted = calcEveningNextTime(lastAt, cycleMinutes, options)
+      || new Date(lastAt.getTime() + cycleMinutes * 60000);
+    return applyMorningWake(lastAt, predicted, options);
+  }
   // v5: 1日予算制のスケジューラ本体。純関数として全画面（ホーム/イレギュラー/タイムチャート）で共通使用する。
   // R（残り予算）が20ml未満なら「きょうの目安ぶんは完了」として扱う。
   // 次回量は「1日の残り予算Rの中で満額を出せるだけ出す」方式: 前借り後でも1日に余裕があれば満額に戻り、
   // 足りなくなったときだけ自然に減る（前借り分を機械的に差し引く減額はしない）。
   // 周期は固定値ではなくbucketCycles(機能1: 時間帯別の周期)から、前回授乳の時刻が属する区分で解決する。
   // その区分が未学習ならfallbackCycleMinutes(全体の実測周期→標準周期)を使う。
-  function calcNextFeed(lastLog, perFeedMl, bucketCycles, fallbackCycleMinutes, remainingMl, now) {
+  // options(省略可): getCycleInfo().nextFeedOptions。夕方の予測の補正に使う(calcEveningNextTime参照)。
+  function calcNextFeed(lastLog, perFeedMl, bucketCycles, fallbackCycleMinutes, remainingMl, now, options) {
     if (remainingMl < 20) return { done: true };
     if (!lastLog) {
       return { time: now, ml: roundToUnit(Math.min(perFeedMl, remainingMl)) };
@@ -893,7 +986,7 @@
     // lightFeedはホームの「少なめだったね」の一言用。
     var ml = roundToUnit(Math.min(perFeedMl, remainingMl));
     if (!lastLog.irregular) {
-      var time = new Date(new Date(lastLog.at).getTime() + cycleMinutes * 60000);
+      var time = calcNextTimeAfter(new Date(lastLog.at), cycleMinutes, options);
       return { time: time, ml: ml, lightFeed: drankRatio < LIGHT_FEED_RATIO };
     }
     // 前借り(イレギュラー)の回だけは、量を意図的に減らしているので時間クレジットで次を早める。
@@ -1369,7 +1462,12 @@
       diaperStock: null,
       // 1回の目安の手動上書き {ml, setAt}。ml=nullは「自動にもどす」を選んだ記録。
       // getMergedPerFeedOverride経由で配信データとマージする(diaperStockと同じ考え方)。
-      perFeedOverride: null
+      perFeedOverride: null,
+      // 寝る前のミルクの時刻 {time:"HH:MM"|null, setAt}。time=nullは「使わない」を選んだ記録。
+      // 一度も設定していない(null)ときはDEFAULT_BEDTIME_FEED_TIMEを使う。
+      bedtimeFeed: null,
+      // 朝まで寝る時刻 {time:"HH:MM"|null, setAt}。形式・考え方はbedtimeFeedと同じ。未設定はDEFAULT_MORNING_WAKE_TIME。
+      morningWake: null
     };
   }
   function loadState() {
@@ -1408,7 +1506,11 @@
           // 新しい{ml, setAt}形式へ。旧データはsetAtを持たないので「いま」を仮に入れる。
           : (typeof parsed.settings.perFeedOverrideMl === "number" && parsed.settings.perFeedOverrideMl > 0
             ? { ml: parsed.settings.perFeedOverrideMl, setAt: toLocalISO(new Date()) }
-            : null)
+            : null),
+        bedtimeFeed: (parsed.bedtimeFeed && typeof parsed.bedtimeFeed.setAt === "string")
+          ? parsed.bedtimeFeed : null,
+        morningWake: (parsed.morningWake && typeof parsed.morningWake.setAt === "string")
+          ? parsed.morningWake : null
       };
     } catch (err) {
       console.error("[sakura-milk-navi] 状態の読み込みに失敗しました。初期状態を使用します。", err);
@@ -1516,8 +1618,28 @@
       isObserved: observed !== null,
       standardCycleMinutes: standardCycle,
       standardFeedsPerDay: standardFeeds,
-      bucketCycles: bucketCycles
+      bucketCycles: bucketCycles,
+      // 夕方の次回時刻の予測にだけ使う(calcNextFeed参照)。未学習はnull。
+      nextFeedOptions: {
+        eveningShortMinutes: (bucketObserved && bucketObserved.eveningShort) || null,
+        eveningToNightMinutes: (bucketObserved && bucketObserved.eveningToNight) || null,
+        bedtimeMinutes: getClockSettingMinutes("bedtimeFeed"),
+        morningMinutes: getClockSettingMinutes("morningWake")
+      }
     };
+  }
+  // 時刻の設定の値(0時からの分)。「使わない」にしたときはnull。一度も設定していなければ既定の時刻。
+  var CLOCK_SETTING_DEFAULTS = { bedtimeFeed: DEFAULT_BEDTIME_FEED_TIME, morningWake: DEFAULT_MORNING_WAKE_TIME };
+  function getClockSettingMinutes(key) {
+    var setting = getMergedClockSetting(key);
+    var time = setting ? setting.time : CLOCK_SETTING_DEFAULTS[key];
+    return time ? parseClockMinutes(time) : null;
+  }
+  function parseClockMinutes(hhmm) {
+    var parts = String(hhmm).split(":");
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    return (isNaN(h) || isNaN(m)) ? null : h * 60 + m;
   }
   function getFeedsPerDay() {
     return getCycleInfo().feedsPerDay;
@@ -1888,6 +2010,18 @@
     if (isNaN(localMs)) return remote;
     return remoteMs > localMs ? remote : local;
   }
+  // 時刻の設定(bedtimeFeed/morningWake)も同じlast-write-wins(setAtが新しいほう)。time=nullは「使わない」を選んだ記録。
+  function getMergedClockSetting(key) {
+    var local = state[key];
+    var remote = (remoteHistory && remoteHistory[key]) || null;
+    if (!local) return remote;
+    if (!remote) return local;
+    var localMs = new Date(local.setAt).getTime();
+    var remoteMs = new Date(remote.setAt).getTime();
+    if (isNaN(remoteMs)) return local;
+    if (isNaN(localMs)) return remote;
+    return remoteMs > localMs ? remote : local;
+  }
   function getMergedPees() {
     return mergeTimeEvents(state.pees, remoteHistory ? remoteHistory.pees : null);
   }
@@ -1974,6 +2108,15 @@
     if (!isFinite(ml) || ml < MIN_PER_FEED_ML || ml > PER_FEED_OVERRIDE_MAX_ML) return null;
     return { ml: ml, setAt: at };
   }
+  // 時刻の設定。Worker側と同じ形式(time="HH:MM"またはnull / setAt=分まで)で検証する。
+  var CLOCK_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+  function normalizePublishClockSetting(setting) {
+    if (!setting) return null;
+    var at = normalizePublishAt(setting.setAt);
+    if (at === null) return null;
+    if (setting.time === null) return { time: null, setAt: at };
+    return CLOCK_TIME_PATTERN.test(setting.time) ? { time: setting.time, setAt: at } : null;
+  }
   function normalizePublishWeight(entry) {
     if (!entry || typeof entry.date !== "string" || !PUBLISH_DATE_PATTERN.test(entry.date)) return null;
     var grams = Math.round(Number(entry.grams));
@@ -2008,7 +2151,9 @@
       // おむつの残りの基準。マージ結果を送らないと、他の端末が入れた新しい基準を消してしまう。
       diaperStock: normalizePublishDiaperStock(getMergedDiaperStock()),
       // 1回の目安の手動上書き。同じ理由でマージ結果を送る。
-      perFeedOverride: normalizePublishPerFeedOverride(getMergedPerFeedOverride())
+      perFeedOverride: normalizePublishPerFeedOverride(getMergedPerFeedOverride()),
+      bedtimeFeed: normalizePublishClockSetting(getMergedClockSetting("bedtimeFeed")),
+      morningWake: normalizePublishClockSetting(getMergedClockSetting("morningWake"))
     };
   }
   // 自動配信してよいか: あいことば保存済み かつ Worker側の状態が確定している(成功 or 404未登録)ときだけ。
@@ -2256,7 +2401,7 @@
       var now = new Date();
       var remainingBudget = Math.max(0, getDailyTotalMl() - getTodayTotalMl());
       var nextFeed = (perFeed > 0 && info.cycleMinutes > 0)
-        ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now)
+        ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now, info.nextFeedOptions)
         : { done: true };
       var syncPayload = {
         subscription: subscription.toJSON(),
@@ -2373,7 +2518,7 @@
     var dailyTotal = getDailyTotalMl();
     var remainingBudget = Math.max(0, dailyTotal - todayTotal);
     var nextFeed = (perFeed > 0 && info.cycleMinutes > 0)
-      ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now)
+      ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now, info.nextFeedOptions)
       : { done: true };
     var noteEl = document.getElementById("next-feed-note");
     var hintEl = document.getElementById("next-feed-hint");
@@ -2667,6 +2812,10 @@
     // 判定には月齢の標準周期を使う。実測周期は短くなりがちで、
     // 夜のまとめ寝のたびに「記録漏れかも」と誤検知してしまうため。
     var looksMissing = !lastLog || gapMinutes > getCycleInfo().standardCycleMinutes + 60;
+    // 朝まで寝る設定のときは、朝の時刻+1時間までは出さない(2026-10-28)。
+    // 朝まで寝ているだけなのに、6時ごろ「記録わすれ？」と出てしまうため。
+    var morningMinutes = getClockSettingMinutes("morningWake");
+    if (morningMinutes !== null && hour * 60 + now.getMinutes() < morningMinutes + 60) return false;
     return isMorningWindow && looksMissing;
   }
   // 機能2: 夕方区分の周期が全体の実測周期よりはっきり短い(75%以下)ときは、この後ぐずりやすい
@@ -2805,7 +2954,7 @@
     var remainingBudget = Math.max(0, dailyTotal - sumToday);
     var lastLog = getLastFeedLog();
     var nextFeed = (perFeed > 0 && info.cycleMinutes > 0)
-      ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now)
+      ? calcNextFeed(lastLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingBudget, now, info.nextFeedOptions)
       : { done: true };
     var actualRows = todayLogs.map(function (l) {
       return { time: new Date(l.at), ml: l.ml, irregular: !!l.irregular };
@@ -2830,8 +2979,9 @@
           break;
         }
         // 予定の刻み幅(機能1)も、その予定時刻が属する区分の周期に従う
+        // 夕方の寝る前のミルク・朝まで寝るもホームと同じく反映する(calcNextTimeAfter)
         var stepCycle = resolveCycleMinutesForBucket(info.bucketCycles, info.cycleMinutes, t.getHours());
-        t = new Date(t.getTime() + stepCycle * 60000);
+        t = calcNextTimeAfter(t, stepCycle, info.nextFeedOptions);
         ml = roundToUnit(Math.min(perFeed, remaining));
       }
       rows.forEach(function (r) {
@@ -3083,7 +3233,7 @@
           // 前借り後を想定した仮のlastLogでcalcNextFeedを計算し、記録後の実際の次回表示と一致させる。
           var hypotheticalLog = { at: toLocalISO(now), ml: result.okMl, irregular: true };
           var remainingAfterGive = Math.max(0, dailyTotal - (todayTotal + result.okMl));
-          var nextFeed = calcNextFeed(hypotheticalLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingAfterGive, now);
+          var nextFeed = calcNextFeed(hypotheticalLog, perFeed, info.bucketCycles, info.cycleMinutes, remainingAfterGive, now, info.nextFeedOptions);
           var nextText = nextFeed.done
             ? "これで、きょうの目安ぶんは完了になりそうだよ"
             : formatTime(nextFeed.time) + " ごろに " + nextFeed.ml + "ml";
@@ -3762,6 +3912,8 @@
   function renderSettings() {
     renderBabyInfoCard();
     renderPerFeedOverrideCard();
+    renderClockSettingCard("bedtimeFeed");
+    renderClockSettingCard("morningWake");
     renderPushStatus();
     renderSecretField();
     renderSyncStatus();
@@ -3843,6 +3995,54 @@
     scheduleAutoPublishHistory();
     showToast("自動計算にもどしたよ");
     renderPerFeedOverrideCard();
+  }
+  // 時刻の設定欄(寝る前のミルク・朝まで寝る)。家族の端末と共通。入力中(フォーカス中)は上書きしない。
+  var CLOCK_SETTING_CARDS = {
+    bedtimeFeed: {
+      idPrefix: "bedtime-feed", name: "寝る前のミルク",
+      statusOn: function (t) { return "夕方に飲んだら、次は" + t + "より後ろにしないよ(家族の端末と共通だよ)"; },
+      statusOff: "いまは使っていないよ。夕方も間隔だけで計算するよ"
+    },
+    morningWake: {
+      idPrefix: "morning-wake", name: "朝まで寝る",
+      statusOn: function (t) { return "夜中に飲んだら、次は朝" + t + "より前にしないよ(家族の端末と共通だよ)"; },
+      statusOff: "いまは使っていないよ。夜中も間隔だけで計算するよ"
+    }
+  };
+  function formatClockMinutes(minutes) {
+    return pad2(Math.floor(minutes / 60)) + ":" + pad2(minutes % 60);
+  }
+  function renderClockSettingCard(key) {
+    var card = CLOCK_SETTING_CARDS[key];
+    var input = document.getElementById(card.idPrefix + "-input");
+    var minutes = getClockSettingMinutes(key);
+    var text = minutes === null ? "" : formatClockMinutes(minutes);
+    if (document.activeElement !== input) input.value = text;
+    // 文中では「07:00」より「7:00」のほうが読みやすい(入力欄はHH:MMのまま)
+    document.getElementById(card.idPrefix + "-status").textContent =
+      minutes === null ? card.statusOff : card.statusOn(text.replace(/^0/, ""));
+  }
+  // time:nullも「使わない」を選んだ変更として配信する(setAtで新しさを競わせるため)
+  function saveClockSetting(key, time) {
+    var patch = {};
+    patch[key] = { time: time, setAt: toLocalISO(new Date()) };
+    state = Object.assign({}, state, patch);
+    saveState();
+    scheduleAutoPublishHistory();
+    var card = CLOCK_SETTING_CARDS[key];
+    showToast(time ? card.name + "を" + time + "にしたよ" : card.name + "は使わないようにしたよ");
+    renderClockSettingCard(key);
+  }
+  function bindClockSettingCard(key) {
+    var card = CLOCK_SETTING_CARDS[key];
+    document.getElementById(card.idPrefix + "-save").addEventListener("click", function () {
+      var value = document.getElementById(card.idPrefix + "-input").value;
+      if (!CLOCK_TIME_PATTERN.test(value)) { showToast("時刻を入れてね"); return; }
+      saveClockSetting(key, value);
+    });
+    document.getElementById(card.idPrefix + "-off").addEventListener("click", function () {
+      saveClockSetting(key, null);
+    });
   }
   function renderPushStatus() {
     var statusEl = document.getElementById("push-status-text");
@@ -3948,6 +4148,8 @@
     document.getElementById("diaper-save").addEventListener("click", saveDiaperCount);
     document.getElementById("per-feed-override-save").addEventListener("click", savePerFeedOverride);
     document.getElementById("per-feed-override-clear").addEventListener("click", clearPerFeedOverride);
+    bindClockSettingCard("bedtimeFeed");
+    bindClockSettingCard("morningWake");
     document.getElementById("btn-go-outing").addEventListener("click", function () { showScreen("outing"); });
     document.getElementById("outing-back-top").addEventListener("click", function () { showScreen("home"); });
     document.getElementById("irregular-back-top").addEventListener("click", function () { showScreen("home"); });
