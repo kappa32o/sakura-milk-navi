@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#e05780">
-<meta name="description" content="はるたんとさくらたんのための授乳サポートPWA「さくらのミルクナビ」。次の授乳タイミングや1回量の目安をやさしく教えてくれます。">
+<meta name="description" content="はるたんとさくぱんのための授乳サポートPWA「さくらのミルクナビ」。次の授乳タイミングや1回量の目安をやさしく教えてくれます。">
 <title>さくらのミルクナビ</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -232,7 +232,7 @@
 <body>
 <div class="app-shell">
   <header class="app-header">
-    <h1 class="app-title">🌸 さくらのミルクナビ<small>はるたんとさくらたんのための授乳サポート</small></h1>
+    <h1 class="app-title">🌸 さくらのミルクナビ<small>はるたんとさくぱんのための授乳サポート</small></h1>
   </header>
   <main>
     <section id="screen-home" class="screen">
@@ -430,7 +430,7 @@
     <section id="screen-evidence" class="screen" hidden>
       <h2 class="screen-title">💡 どうしてこの量なの？</h2>
       <div class="card">
-        <h3 id="evidence-explain-title">さくらたんの体重が教えてくれるよ</h3>
+        <h3 id="evidence-explain-title">さくぱんの体重が教えてくれるよ</h3>
         <p class="body-text" id="evidence-explain"></p>
       </div>
       <div class="card">
@@ -455,10 +455,10 @@
       </div>
       <div class="card">
         <h3>国のガイドも「赤ちゃんそれぞれでいい」って言ってるよ</h3>
-        <p class="body-text">厚生労働省の「授乳・離乳の支援ガイド」でも、飲む量や間隔は赤ちゃんごとに違って当たり前とされているよ。数字はあくまで目安。さくらたんのご機嫌がよくて、体重が少しずつ増えていれば、それがいちばんの証拠だよ。</p>
+        <p class="body-text">厚生労働省の「授乳・離乳の支援ガイド」でも、飲む量や間隔は赤ちゃんごとに違って当たり前とされているよ。数字はあくまで目安。さくぱんのご機嫌がよくて、体重が少しずつ増えていれば、それがいちばんの証拠だよ。</p>
       </div>
       <div class="card" id="growth-card" hidden>
-        <h3>さくらたんの成長</h3>
+        <h3>さくぱんの成長</h3>
         <p class="body-text" id="growth-feed-line" hidden></p>
         <p class="body-text" id="growth-weight-line" hidden></p>
       </div>
@@ -466,7 +466,7 @@
     <section id="screen-settings" class="screen" hidden>
       <h2 class="screen-title">設定</h2>
       <div class="card">
-        <p class="eyebrow">さくらたんのこと</p>
+        <p class="eyebrow">さくぱんのこと</p>
         <p class="body-text" id="baby-info-age"></p>
         <p class="body-text" id="baby-info-weight"></p>
       </div>
@@ -539,7 +539,7 @@
   // ミルクの胃内半減期は約78分(母乳の約2倍)。60分未満の追いミルクは
   // 消化負担・吐き戻しリスクがあるため、ミルク以外の対処を促す。
   var MIN_MILK_INTERVAL_MINUTES = 60;
-  // 前借りの下限は1回量の半分。さくらたんはよく飲むので固定40mlより多めに設定。
+  // 前借りの下限は1回量の半分。さくぱんはよく飲むので固定40mlより多めに設定。
   var ADVANCE_FLOOR_RATIO = 0.5;
   // 目安の8割を飲めば「満足するまで飲んだ」とみなし、次の授乳を早めない(calcNextFeed参照)。
   // 毎回ぴったり飲みきることはないので、少し残しただけで前倒しにすると予定がずれ続ける。
@@ -551,7 +551,7 @@
   // お腹がすいていなくて飲まなかったケースなので、次回を早める根拠にも周期学習にも使わない。
   var LIGHT_FEED_RATIO = 0.5;
   // 実測周期の学習パラメータ。月齢テーブルの回数はあくまで一般的な目安で、
-  // 赤ちゃんごとの実際のペースとはずれる（さくらたんは標準3.5時間に対し実測2〜3時間）。
+  // 赤ちゃんごとの実際のペースとはずれる（さくぱんは標準3.5時間に対し実測2〜3時間）。
   // ずれたまま「次のミルク」を出すと毎回外れるので、記録がたまったら実測を優先する。
   // 2026-10-13: 3日→7日に広げ、新しい間隔ほど重く数える(半減期2日)。3日の単純な中央値では、
   // ぐずった1日で周期が20〜30分動いていた。重みつきなら1日のブレは数分に収まり、
@@ -590,7 +590,7 @@
   // 1回の目安を手入力で決めるときの上限(打ち間違い対策、DIAPER_MAX_COUNTと同じ考え方)。
   var PER_FEED_OVERRIDE_MAX_ML = 400;
   // 次の授乳がこの分数以内に迫ったら「起こさなくていい・先に用意しておこう」の一言を出す。
-  // 時刻表示や通知を見て、寝ているさくらたんを起こしにいってしまわないように。
+  // 時刻表示や通知を見て、寝ているさくぱんを起こしにいってしまわないように。
   var NEXT_FEED_PREP_MINUTES = 20;
   var RECORD_HISTORY_DAYS = 7;
   // 8日目〜この日数前までは、日付ごとに折りたたんで表示する(記録一覧が無限に伸びるのを防ぐ上限)。
@@ -605,22 +605,22 @@
   var TIMECHART_LABEL_GAP_PX = 30;
   var DEFAULT_PAPA_MESSAGES = [
     "今日もほんとうにえらい。はるたんのペースで大丈夫",
-    "泣くのはさくらたんのおしゃべり。責められてるわけじゃないよ",
-    "うまくいかない日があっても、さくらたんははるたんが大好き",
+    "泣くのはさくぱんのおしゃべり。責められてるわけじゃないよ",
+    "うまくいかない日があっても、さくぱんははるたんが大好き",
     "ひとりで頑張りすぎないでね。パパもすぐ帰るよ",
     "ミルクの量は日によって違って当たり前。ぜんぶ順調のうちだよ",
-    "はるたんが休むことも、さくらたんのためになるんだよ",
-    "完璧じゃなくていい。笑ってるはるたんがさくらたんはいちばん好き",
+    "はるたんが休むことも、さくぱんのためになるんだよ",
+    "完璧じゃなくていい。笑ってるはるたんがさくぱんはいちばん好き",
     "困ったらミツヒコに頼っていいんだよ。頼るのも立派な育児",
-    "さくらたんがすくすく育ってるのは、はるたんのおかげだよ",
+    "さくぱんがすくすく育ってるのは、はるたんのおかげだよ",
     "家事はあとまわしでOK。いまはふたりのお昼寝がいちばん大事",
-    "どんな一日でも、さくらたんにとってはるたんは世界一のママだよ"
+    "どんな一日でも、さくぱんにとってはるたんは世界一のママだよ"
   ];
   // 夜(22時〜朝6時)だけメッセージ候補に加わる夜間専用のねぎらい
   var NIGHT_PAPA_MESSAGES = [
     "夜中の授乳、ほんとうにおつかれさま。はるたんは今日もすごい",
     "真っ暗な時間にがんばってるの、パパはちゃんと知ってるよ",
-    "眠いよね。さくらたんが寝たら、はるたんもすぐ横になってね"
+    "眠いよね。さくぱんが寝たら、はるたんもすぐ横になってね"
   ];
   var NIGHT_MESSAGE_START_HOUR = 22;
   var NIGHT_MESSAGE_END_HOUR = 6;
@@ -793,7 +793,7 @@
     }
     return gaps;
   }
-  // 記録から「さくらたんの実際の周期」を読みとる。直近7日の隣り合う授乳の間隔を集め、
+  // 記録から「さくぱんの実際の周期」を読みとる。直近7日の隣り合う授乳の間隔を集め、
   // 外れ値（追いミルク・記録漏れ・少なめの回のあと）を落として重みつき中央値をとる。
   // 平均ではなく中央値なのは、夜のまとめ寝1回で全体が引っぱられないようにするため。
   function calcObservedCycleMinutes(feedLogs, now) {
@@ -881,7 +881,7 @@
     }
     // 上限は「体重×200ml/kg」と「その時期の1回上限×回数」の広いほうを採る。
     // 体重ベースだけで縛ると、よく飲む子で毎日「上限超え」の警告が出てしまう
-    // （さくらたんは実測で1日約250ml/kg飲むが、体重増加は27g/日で標準ペース）。
+    // （さくぱんは実測で1日約250ml/kg飲むが、体重増加は27g/日で標準ペース）。
     // 缶や母子手帳の月齢別目安も同じくらい根拠があるので、どちらか広いほうを上限にする。
     var bandCapMl = row.maxMl * row.defFeeds;
     var maxMl = Math.min(Math.max((weightGrams / 1000) * DAILY_COEF_MAX, bandCapMl), DAILY_CAP_ML);
@@ -1426,7 +1426,7 @@
   function formatTime(date) { return pad2(date.getHours()) + ":" + pad2(date.getMinutes()); }
   function formatDateISO(date) { return date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate()); }
   function toLocalISO(date) { return formatDateISO(date) + "T" + pad2(date.getHours()) + ":" + pad2(date.getMinutes()); }
-  // "YYYY-MM-DD" を「YYYY年M月D日」表記にする(設定画面の「さくらたんのこと」表示用)
+  // "YYYY-MM-DD" を「YYYY年M月D日」表記にする(設定画面の「さくぱんのこと」表示用)
   function formatJapaneseDate(dateStr) {
     var parts = dateStr.split("-");
     return parts[0] + "年" + parseInt(parts[1], 10) + "月" + parseInt(parts[2], 10) + "日";
@@ -1479,6 +1479,11 @@
       if (!Array.isArray(settings.papaMessages) || settings.papaMessages.length === 0) {
         settings.papaMessages = DEFAULT_PAPA_MESSAGES.slice();
       } else {
+        // 呼び名を「さくらたん」→「さくぱん」に変えた(2026-10-28、ユーザー指定)。
+        // 端末に保存済みのメッセージも置き換える(しないと既定メッセージとみなされず古い呼び名が残る)。
+        settings.papaMessages = settings.papaMessages.map(function (m) {
+          return typeof m === "string" ? m.replace(/さくらたん/g, "さくぱん") : m;
+        });
         // 保存済みメッセージがすべてデフォルト由来（=カスタムされていない）なら、
         // レパートリー追加が既存端末にも届くよう最新のデフォルト一式に置き換える。
         // 夜間専用へ移動した旧メッセージも「デフォルト由来」とみなす。
@@ -1528,7 +1533,7 @@
   }
   // 回答の基準: 体重が入力されていれば体重ベース、なければ誕生日からの月齢ベース
   // 体重の実測値があるか。端末で入力したものでも、配信データに含まれるものでもよい
-  // （どちらも「さくらたん本人の実測値」なので、目安の計算根拠として同じ重みで扱う）。
+  // （どちらも「さくぱん本人の実測値」なので、目安の計算根拠として同じ重みで扱う）。
   function hasWeight() {
     return getLatestWeightEntry() !== null;
   }
@@ -2569,7 +2574,7 @@
     // 警告はレンジ上限(体重×200ml/kg相当)を超えたときだけ。目安内の多め・少なめは正常のうち。
     if (range.max > 0 && todayTotal > range.max) {
       warnEl.hidden = false;
-      warnEl.textContent = "今日は目安の上限(" + Math.round(range.max) + "ml)より多めです。さくらたんの様子を見て、心配ならみつひこに相談してね";
+      warnEl.textContent = "今日は目安の上限(" + Math.round(range.max) + "ml)より多めです。さくぱんの様子を見て、心配ならみつひこに相談してね";
     } else {
       warnEl.hidden = true;
     }
@@ -2711,7 +2716,7 @@
     var celebration = calcNextCelebration(state.settings.birthDate, now);
     if (celebration) {
       items.push(celebration.daysLeft === 0
-        ? { icon: "🎉", value: "きょうは" + celebration.name + "！", label: "おめでとう、さくらたん" }
+        ? { icon: "🎉", value: "きょうは" + celebration.name + "！", label: "おめでとう、さくぱん" }
         : { icon: celebration.icon, value: "つぎは" + celebration.name, label: "あと" + celebration.daysLeft + "日だよ",
             progress: { percent: celebration.percent, goal: "" } });
     }
@@ -2772,7 +2777,7 @@
     if (typeof ageDays === "number" && ageDays >= 0) {
       items.push({
         icon: "🌸",
-        value: "さくらたんと " + ageDays + "日",
+        value: "さくぱんと " + ageDays + "日",
         label: "うまれた日からきょうまで",
         progress: calcBirthdayGoal(state.settings.birthDate, now)
       });
@@ -3330,7 +3335,7 @@
     // 目安量が出せない(誕生日も体重もない)ときは、持ち物の数を作れない
     if (perFeed <= 0) {
       setMessageWithLineBreaks(headlineEl, "まだ目安が出せないよ");
-      timesEl.textContent = "設定でさくらたんの誕生日か体重を入れてね";
+      timesEl.textContent = "設定でさくぱんの誕生日か体重を入れてね";
       beforeEl.hidden = true;
       packCard.hidden = true;
       return;
@@ -3826,28 +3831,28 @@
       var rangeText = "1日の合計は" + Math.round(range.min) + "〜" + Math.round(range.max) + "mlがレンジの目安";
       // 実測ペースを使っているときは、なぜ表の回数と違うのかを先に説明する
       var paceSentence = info.isObserved
-        ? "いまは、さくらたんの実際の記録から読みとった「約" + cycleText + "おき」のペースで計算しているよ（下の表の一般的な目安は" + row.times + "だけど、赤ちゃんによってペースは違うから、さくらたん自身の記録のほうを優先しているの）。"
+        ? "いまは、さくぱんの実際の記録から読みとった「約" + cycleText + "おき」のペースで計算しているよ（下の表の一般的な目安は" + row.times + "だけど、赤ちゃんによってペースは違うから、さくぱん自身の記録のほうを優先しているの）。"
         : "";
       if (row.dayRule) {
         titleEl.textContent = "生まれてすぐは、日数が教えてくれるよ";
         explainEl.textContent =
-          "生後1週間ごろまでは「生後日数×10ml」が1回量の一般的な目安だよ。" + paceSentence + "さくらたんは" + ageLabel + "だから1回約" + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleText + "おき。" + rangeText + "。足りなさそうなら+10mlしても大丈夫とされているよ。";
+          "生後1週間ごろまでは「生後日数×10ml」が1回量の一般的な目安だよ。" + paceSentence + "さくぱんは" + ageLabel + "だから1回約" + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleText + "おき。" + rangeText + "。足りなさそうなら+10mlしても大丈夫とされているよ。";
       } else if (hasWeight()) {
-        titleEl.textContent = "さくらたんの体重が教えてくれるよ";
+        titleEl.textContent = "さくぱんの体重が教えてくれるよ";
         var estimatedW = getWeightForCalc();
         var entry = getLatestWeightEntry();
         var projectSentence = (entry && entry.date && estimatedW > entry.grams)
           ? "体重は" + entry.date + "に入れた" + entry.grams + "gから、標準の増えかた（1日約" + WEIGHT_GAIN_PER_DAY_UNDER_3M + "g）で今日は約" + Math.round(estimatedW) + "gと推定しているよ。"
           : "";
         explainEl.textContent =
-          "1日の合計の目安は、体重1kgあたり150〜200ml（国際的にも使われているレンジ）と、この時期の月齢別の目安のうち、広いほうで計算しているよ。" + projectSentence + paceSentence + "さくらたんは" + ageLabel + "だから、" + rangeText + "。それを1日" + feeds + "回・約" + cycleText + "おきに分けているよ。レンジの中なら多め・少なめの日があって当たり前だよ。";
+          "1日の合計の目安は、体重1kgあたり150〜200ml（国際的にも使われているレンジ）と、この時期の月齢別の目安のうち、広いほうで計算しているよ。" + projectSentence + paceSentence + "さくぱんは" + ageLabel + "だから、" + rangeText + "。それを1日" + feeds + "回・約" + cycleText + "おきに分けているよ。レンジの中なら多め・少なめの日があって当たり前だよ。";
       } else {
-        titleEl.textContent = "さくらたんの月齢から計算してるよ";
+        titleEl.textContent = "さくぱんの月齢から計算してるよ";
         explainEl.textContent =
-          "いまは誕生日（2026年7月9日）から計算した" + ageLabel + "と、この時期の標準的な体重（約" + (row.stdMid / 1000).toFixed(1) + "kg）で目安を出しているよ。" + paceSentence + "1回 " + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleText + "おきで、" + rangeText + "。設定で体重を入れると、さくらたんの体にもっとぴったりの量になるよ。";
+          "いまは誕生日（2026年7月9日）から計算した" + ageLabel + "と、この時期の標準的な体重（約" + (row.stdMid / 1000).toFixed(1) + "kg）で目安を出しているよ。" + paceSentence + "1回 " + getPerFeedMl() + "ml・1日" + feeds + "回・約" + cycleText + "おきで、" + rangeText + "。設定で体重を入れると、さくぱんの体にもっとぴったりの量になるよ。";
       }
     } else {
-      titleEl.textContent = "さくらたんの月齢から計算してるよ";
+      titleEl.textContent = "さくぱんの月齢から計算してるよ";
       explainEl.textContent = "設定で誕生日か体重を入れると、ここに目安の理由が出るよ。";
     }
     var tbody = document.getElementById("aikureo-tbody");
@@ -3934,7 +3939,7 @@
       el.hidden = false;
     }).catch(function () { /* 取れなくても表示しないだけ */ });
   }
-  // 「さくらたんのこと」カード: 誕生日・生後日数・体重は読み取り専用の表示のみ。
+  // 「さくぱんのこと」カード: 誕生日・生後日数・体重は読み取り専用の表示のみ。
   // 誕生日はstate.settings.birthDate(初期値2026-07-09)、体重は配信データ込みの実測値
   // (getLatestWeightEntry、ぴよログの取り込み・配信データ由来のものを含む)をそのまま使う。
   function renderBabyInfoCard() {
